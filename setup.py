@@ -22,7 +22,7 @@ setup(
         'Programming Language :: Python :: 3'
     ],
 
-    keywords='cqg fix protocol',
+    keywords='cqg fix protocol trading',
 
     packages=find_packages(exclude=['contrib', 'cqgfixtrader.egg-info', 'tests']),
 
