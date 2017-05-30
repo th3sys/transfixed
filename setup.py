@@ -18,8 +18,8 @@ setup(
     license='MIT',
     platforms=['any'],
     classifiers=[
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 3'
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.6'
     ],
 
     keywords='cqg fix protocol trading',

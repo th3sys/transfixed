@@ -1,4 +1,5 @@
 import quickfix as fix
+import logging
 
 
 class FixClient(fix.Application, object):
@@ -9,6 +10,16 @@ class FixClient(fix.Application, object):
         self.orderID = 0
         self.execID = 0
         self.Logger = logger
+
+    @classmethod
+    def CreateInitiator(cls, logger, config):
+        logger.setLevel(logging.INFO)
+        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s')
+        settings = fix.SessionSettings(config)
+        application = FixClient(settings, logger)
+        storeFactory = fix.FileStoreFactory(settings)
+        logFactory = fix.FileLogFactory(settings)
+        return fix.SocketInitiator(application, storeFactory, settings, logFactory)
 
     def onCreate(self, sessionID):
         self.Logger.info("Session created. Session: %s" % sessionID)
