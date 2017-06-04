@@ -8,11 +8,11 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='cqgfixtrader',
+    name='transfixed',
     version='1.0.0',
-    description='CQG FIX TRADER',
+    description='FIX TRADING LIBRARY',
     long_description=long_description,
-    url='https://github.com/th3sys/cqgfixtrader',
+    url='https://github.com/th3sys/transfixed',
     author='Alexy Shelest',
     author_email='alexy@th3sys.com',
     license='MIT',
@@ -22,13 +22,13 @@ setup(
         'Programming Language :: Python :: 3.6'
     ],
 
-    keywords='cqg fix protocol trading',
+    keywords='gain futures cqg fix protocol trading',
 
-    packages=find_packages(exclude=['contrib', 'cqgfixtrader.egg-info', 'tests']),
+    packages=find_packages(exclude=['transfixed.egg-info', 'test_gain']),
 
     install_requires=['quickfix'],
 
     package_data={
-        'cqgfixtrader': ['FIX42.xml', 'sample_config.ini'],
+        'transfixed': ['fix/FIX42.xml', 'gain_config.ini', 'cqg_config.ini'],
     },
 )

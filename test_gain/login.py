@@ -1,5 +1,5 @@
 import quickfix as fix
-from cqgfixtrader import etrading as et
+from transfixed import gainfixtrader as gain
 import time
 import logging
 
@@ -7,7 +7,7 @@ import logging
 def main():
     logger = logging.getLogger()
     try:
-        init = et.FixClient.CreateInitiator(logger, 'config.ini')
+        init = gain.FixClient.CreateInitiator(logger, 'config.ini')
         init.start()
         # replace with asyncio
         while True:
