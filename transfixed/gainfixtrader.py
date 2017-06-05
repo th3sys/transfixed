@@ -35,6 +35,10 @@ class FixClient(fix.Application, object):
         return
 
     def toAdmin(self, message, sessionID):
+        uuid = self.Settings.get().getString('Username')
+        password = self.Settings.get().getString('Password')
+        message.getHeader().setField(fix.StringField(554, password))
+        message.getHeader().setField(fix.StringField(12003, uuid))
         self.Logger.info("Sending Admin message to server. Session: %s. Message: %s" % (sessionID, message))
         return
 
