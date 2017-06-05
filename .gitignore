@@ -3,3 +3,4 @@ cqgfixtrader.egg-info
 config.ini
 test/Sessions
 transfixed.egg-info
+test_gain/Sessions

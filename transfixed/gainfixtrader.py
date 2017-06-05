@@ -52,7 +52,7 @@ class FixClient(fix.Application, object):
 
     def genOrderID(self):
         self.orderID += 1
-        return 'CQG_%s' % str(self.orderID)
+        return '%s' % str(self.orderID)
 
     def genExecID(self):
         self.execID += 1
