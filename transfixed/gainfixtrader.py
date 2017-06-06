@@ -35,10 +35,11 @@ class FixClient(fix.Application, object):
         return
 
     def toAdmin(self, message, sessionID):
-        uuid = self.Settings.get().getString('Username')
-        password = self.Settings.get().getString('Password')
-        message.getHeader().setField(fix.StringField(554, password))
-        message.getHeader().setField(fix.StringField(12003, uuid))
+        if message.getHeader().getField(fix.MsgType()).getString() == fix.MsgType_Logon:
+            uuid = self.Settings.get().getString('Username')
+            password = self.Settings.get().getString('Password')
+            message.getHeader().setField(fix.StringField(554, password))
+            message.getHeader().setField(fix.StringField(12003, uuid))
         self.Logger.info("Sending Admin message to server. Session: %s. Message: %s" % (sessionID, message))
         return
 
@@ -53,6 +54,18 @@ class FixClient(fix.Application, object):
     def fromApp(self, message, sessionID):
         self.Logger.info("Received Application message from server. Session: %s. Message: %s" % (sessionID, message))
         return
+
+    def heartbeat(self):
+        message = fix.Message()
+        message.getHeader().setField(fix.MsgType(fix.MsgType_Heartbeat))
+
+        fix.Session.sendToTarget(message, self.sessionID)
+
+    def logout(self):
+        message = fix.Message()
+        message.getHeader().setField(fix.MsgType(fix.MsgType_Logout))
+
+        fix.Session.sendToTarget(message, self.sessionID)
 
     def genOrderID(self):
         self.orderID += 1
