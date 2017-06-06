@@ -2,7 +2,7 @@ TRANSFIXED - FIX TRADING
 =======================
 
 This is an implementation of the following FIX APIs:
-* GAIN FUTURES FIX API
+* GAIN CAPITAL FUTURES FIX API
 * CQG FIX API
 
 
