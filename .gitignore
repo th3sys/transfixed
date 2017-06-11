@@ -4,3 +4,4 @@ config.ini
 test/Sessions
 transfixed.egg-info
 test_gain/Sessions
+executor.ini

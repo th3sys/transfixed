@@ -5,21 +5,23 @@ import gevent
 import signal
 
 logger = logging.getLogger()
-init = None
+client = None
 
 
 def start():
-    global init
-    init = gain.FixClient.CreateInitiator(logger, 'config.ini')
-    init.start()
+    global client
+    client = gain.FixClient.Create(logger, 'config.ini')
+    client.start()
 
 
-def poll(cond):
-    global init
-    while cond:
+def poll():
+    global client
+    i = 10
+    while i > 0:
+        i -= 1
         gevent.sleep(10)
         logger.info('Waiting for FIX messages')
-    init.stop()
+    client.stop()
 
 
 def main():
@@ -27,7 +29,7 @@ def main():
     try:
         gevent.joinall([
             gevent.spawn(start()),
-            gevent.spawn(poll(True)),
+            gevent.spawn(poll()),
         ])
 
     except (fix.ConfigError, fix.RuntimeError), e:
