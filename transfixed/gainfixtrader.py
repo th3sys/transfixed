@@ -31,6 +31,27 @@ class FixClient(object):
         message = fix44.Logout()
         self.SocketInitiator.application.send(message)
 
+    def sendFuturesOrder(self, symbol, maturity, qty, ordType, side, price=None):
+        orderId = self.SocketInitiator.application.genOrderID()
+        account = self.SocketInitiator.application.Settings.get().getString('MaxLatency')
+
+        trade = fix44.NewOrderSingle()
+        trade.setField(fix.Account(account))
+        trade.setField(fix.ClOrdID(orderId))
+        trade.setField(fix.TransactTime())
+        trade.setField(fix.CFICode('FXXXXS'))
+
+        trade.setField(fix.OrderQty(qty))
+        trade.setField(fix.OrdType(ordType))
+        trade.setField(fix.Side(side))
+        trade.setField(fix.Symbol(symbol))
+        trade.setField(fix.MaturityMonthYear(maturity))
+
+        if price is not None:
+            trade.setField(fix.Price(price))
+
+        self.SocketInitiator.application.send(trade)
+
     def start(self):
         self.Logger.info("Open FIX Connection")
         self.SocketInitiator.start()
@@ -153,13 +174,13 @@ class GainApplication(fix.Application, object):
         return
 
     def send(self, message):
-        self.Logger.info("FixClient is sending: %s" % type(message))
+        self.Logger.info("FixClient is sending: %s" % message.getHeader().getField(fix.MsgType()))
         fix.Session.sendToTarget(message, self.sessionID)
         return
 
     def genOrderID(self):
         self.orderID += 1
-        return '%s' % str(self.orderID)
+        return str(self.orderID)
 
     def genExecID(self):
         self.execID += 1
