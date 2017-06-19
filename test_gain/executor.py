@@ -31,6 +31,9 @@ class Application(fix.Application):
 
     def toAdmin(self, message, sessionID):
         print('toAdmin')
+        sndTime = fix.SendingTime()
+        message.getHeader().getField(sndTime)
+        print(sndTime.getString())
         return
 
     def fromAdmin(self, message, sessionID):
@@ -43,7 +46,6 @@ class Application(fix.Application):
 
     def fromApp(self, message, sessionID):
         print('fromApp')
-
         beginString = fix.BeginString()
         msgType = fix.MsgType()
         message.getHeader().getField(beginString)
@@ -68,6 +70,7 @@ class Application(fix.Application):
         executionReport.getHeader().setField(beginString)
         executionReport.getHeader().setField(fix.MsgType(fix.MsgType_ExecutionReport))
 
+        executionReport.setField(fix.TransactTime())
         executionReport.setField(fix.OrderID(self.genOrderID()))
         executionReport.setField(fix.ExecID(self.genExecID()))
         executionReport.setField(fix.OrdStatus(fix.OrdStatus_NEW))

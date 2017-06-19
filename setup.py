@@ -26,7 +26,7 @@ setup(
 
     packages=find_packages(exclude=['transfixed.egg-info', 'test_gain']),
 
-    install_requires=['quickfix', 'gevent', 'python-dateutil'],
+    install_requires=['quickfix', 'python-dateutil', 'future', 'gevent'],
 
     package_data={
         'transfixed': ['fix/FIX42.xml', 'gain_config.ini', 'cqg_config.ini'],
