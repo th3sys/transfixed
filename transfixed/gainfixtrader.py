@@ -3,7 +3,6 @@ import quickfix44 as fix44
 import logging
 import threading
 from dateutil import parser
-import datetime as dt
 import calendar
 import time
 
@@ -84,7 +83,7 @@ class FixClient(object):
         self.SocketInitiator.application.send(message)
 
     def addOrderListener(self, callback):
-        self.SocketInitiator.application.addMessageHandler(callback)
+        self.SocketInitiator.application.Notifier.addMessageHandler(callback)
 
     def send(self, order):
         orderId = self.SocketInitiator.application.genOrderID()
@@ -113,12 +112,13 @@ class FixClient(object):
 
     def stop(self):
         self.Logger.info("Close FIX Connection")
-        self.SocketInitiator.application.removeAllMsgHandler()
+        self.SocketInitiator.application.Notifier.removeAllMsgHandler()
         self.SocketInitiator.stop()
 
 
 class Observable(object):
     def __init__(self):
+        super(Observable, self).__init__()
         self.__callbacks = []
 
     def addMessageHandler(self, callback):
@@ -229,10 +229,11 @@ class MessageStore(Observable):
                 self.__timeCheck(self.__out[key], self.__in[key])
 
 
-class GainApplication(fix.Application, Observable):
+class GainApplication(fix.Application):
     def __init__(self, settings, logger):
         super(GainApplication, self).__init__()
         self.__messageStore = MessageStore(logger, settings)
+        self.Notifier = Observable()
         self.Settings = settings
         self.sessionID = ''
         self.orderID = int(calendar.timegm(time.gmtime()))
