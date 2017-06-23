@@ -1,5 +1,6 @@
 import time
 import quickfix as fix
+import quickfix44 as fix44
 
 
 class Application(fix.Application):
@@ -51,6 +52,36 @@ class Application(fix.Application):
         message.getHeader().getField(beginString)
         message.getHeader().getField(msgType)
 
+        if msgType.getValue() == fix.MsgType_NewOrderSingle:
+            self.new_order(message, beginString, sessionID)
+        if msgType.getValue() == fix.MsgType_OrderCancelRequest:
+            self.cancel(message, sessionID)
+
+    def cancel(self, message, sessionID):
+        symbol = fix.Symbol()
+        side = fix.Side()
+        orderQty = fix.OrderQty()
+        clOrdID = fix.ClOrdID()
+        org = fix.OrigClOrdID()
+        message.getField(symbol)
+        message.getField(side)
+        message.getField(orderQty)
+        message.getField(clOrdID)
+        message.getField(org)
+
+        cancel = fix44.OrderCancelReject()
+        cancel.setField(clOrdID)
+        cancel.setField(fix.OrderID(self.genOrderID()))
+        cancel.setField(fix.OrdStatus(fix.OrdStatus_NEW))
+        cancel.setField(fix.OrigClOrdID(org.getValue()))
+        cancel.setField(fix.Text('order completed'))
+        cancel.setField(fix.TransactTime())
+        cancel.setField(fix.CxlRejReason(fix.CxlRejReason_BROKER))
+        cancel.setField(fix.CxlRejResponseTo(fix.CxlRejResponseTo_ORDER_CANCEL_REQUEST))
+
+        fix.Session.sendToTarget(cancel, sessionID)
+
+    def new_order(self, message, beginString, sessionID):
         symbol = fix.Symbol()
         side = fix.Side()
         ordType = fix.OrdType()
@@ -88,9 +119,10 @@ class Application(fix.Application):
         try:
             fix.Session.sendToTarget(executionReport, sessionID)
             time.sleep(1)
-            executionReport.setField(fix.OrdStatus(fix.OrdStatus_FILLED))
-            executionReport.setField(fix.ExecType(fix.ExecType_TRADE))
-            fix.Session.sendToTarget(executionReport, sessionID)
+            if ordType.getValue() == fix.OrdType_MARKET:
+                executionReport.setField(fix.OrdStatus(fix.OrdStatus_FILLED))
+                executionReport.setField(fix.ExecType(fix.ExecType_TRADE))
+                fix.Session.sendToTarget(executionReport, sessionID)
 
         except fix.SessionNotFound, e:
             return

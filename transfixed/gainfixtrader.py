@@ -1,5 +1,6 @@
 import quickfix as fix
 import quickfix44 as fix44
+from enum import Enum
 import logging
 import threading
 from dateutil import parser
@@ -7,8 +8,50 @@ import calendar
 import time
 
 
+class OrderStatus(Enum):
+    New = 1,
+    Filled = 2,
+    Cancelled = 3,
+    Rejected = 4
+
+
+class OrderSide(Enum):
+    Buy = 1
+    Sell = 2
+
+
+class OrderType(Enum):
+    Limit = 1
+    Market = 2
+
+
+class Trade(object):
+    def __init__(self, orderId, symbol, maturity, qty, ordType, ordSide, price=None):
+        self.OrderId = orderId
+        self.Symbol = symbol
+        self.Maturity = maturity
+        self.Quantity = qty
+        self.OrderType = ordType
+        self.OrderSide = ordSide
+        self.Price = price
+        self.CFICode = fix.CFICode('FXXXXS')
+
+
+class BuyOrder(object):
+    def __init__(self):
+        super(BuyOrder, self).__init__()
+        self.Side = fix.Side(fix.Side_BUY)
+
+
+class SellOrder(object):
+    def __init__(self):
+        super(SellOrder, self).__init__()
+        self.Side = fix.Side(fix.Side_SELL)
+
+
 class FutureOrder(object):
     def __init__(self, symbol, maturity, qty):
+        super(FutureOrder, self).__init__()
         self.CFICode = fix.CFICode('FXXXXS')
         self.Symbol = fix.Symbol(symbol)
         self.Maturity = fix.MaturityMonthYear(maturity)
@@ -18,39 +61,39 @@ class FutureOrder(object):
 
 class FutureLimitOrder(FutureOrder):
     def __init__(self, symbol, maturity, qty, price):
+        super(FutureLimitOrder, self).__init__(symbol, maturity, qty)
         self.OrdType = fix.OrdType(fix.OrdType_LIMIT)
         self.Price = fix.Price(price)
-        super(FutureLimitOrder, self).__init__(symbol, maturity, qty)
 
 
 class FutureMarketOrder(FutureOrder):
     def __init__(self, symbol, maturity, qty):
-        self.OrdType = fix.OrdType(fix.OrdType_MARKET)
         super(FutureMarketOrder, self).__init__(symbol, maturity, qty)
+        self.OrdType = fix.OrdType(fix.OrdType_MARKET)
 
 
-class BuyFutureLimitOrder(FutureLimitOrder):
+class BuyFutureLimitOrder(FutureLimitOrder, BuyOrder):
     def __init__(self, symbol, maturity, qty, price):
-        self.Side = fix.Side(fix.Side_BUY)
-        super(BuyFutureLimitOrder, self).__init__(symbol, maturity, qty, price)
+        FutureLimitOrder.__init__(self, symbol, maturity, qty, price)
+        BuyOrder.__init__(self)
 
 
-class SellFutureLimitOrder(FutureLimitOrder):
+class SellFutureLimitOrder(FutureLimitOrder, SellOrder):
     def __init__(self, symbol, maturity, qty, price):
-        self.Side = fix.Side(fix.Side_SELL)
-        super(SellFutureLimitOrder, self).__init__(symbol, maturity, qty, price)
+        FutureLimitOrder.__init__(self, symbol, maturity, qty, price)
+        SellOrder.__init__(self)
 
 
-class BuyFutureMarketOrder(FutureMarketOrder):
+class BuyFutureMarketOrder(FutureMarketOrder, BuyOrder):
     def __init__(self, symbol, maturity, qty):
-        self.Side = fix.Side(fix.Side_BUY)
-        super(BuyFutureMarketOrder, self).__init__(symbol, maturity, qty)
+        FutureMarketOrder.__init__(self, symbol, maturity, qty)
+        BuyOrder.__init__(self)
 
 
-class SellFutureMarketOrder(FutureMarketOrder):
+class SellFutureMarketOrder(FutureMarketOrder, SellOrder):
     def __init__(self, symbol, maturity, qty):
-        self.Side = fix.Side(fix.Side_SELL)
-        super(SellFutureMarketOrder, self).__init__(symbol, maturity, qty)
+        FutureMarketOrder.__init__(self, symbol, maturity, qty)
+        SellOrder.__init__(self)
 
 
 class FixEvent(object):
@@ -71,7 +114,9 @@ class FixClient(object):
         storeFactory = fix.FileStoreFactory(settings)
         logFactory = fix.FileLogFactory(settings)
         init = fix.SocketInitiator(application, storeFactory, settings, logFactory)
-        return FixClient(init, logger)
+        client = FixClient(init, logger)
+        application.FixClientRef = client
+        return client
 
     def heartbeat(self):
         message = fix.Message()
@@ -84,6 +129,24 @@ class FixClient(object):
 
     def addOrderListener(self, callback):
         self.SocketInitiator.application.Notifier.addMessageHandler(callback)
+
+    def cancel(self, trade):
+        orderId = self.SocketInitiator.application.genOrderID()
+        account = self.SocketInitiator.application.Settings.get().getString('Account')
+
+        cancel = fix44.OrderCancelRequest()
+        cancel.setField(fix.Account(account))
+        cancel.setField(fix.ClOrdID(orderId))
+        cancel.setField(fix.OrigClOrdID(trade.OrderId))
+
+        cancel.setField(trade.CFICode)
+        cancel.setField(fix.TransactTime())
+        cancel.setField(fix.OrderQty(trade.Quantity))
+        cancel.setField(fix.Side(fix.Side_BUY if trade.OrderSide == OrderSide.Buy else fix.Side_SELL))
+        cancel.setField(fix.Symbol(trade.Symbol))
+        cancel.setField(fix.MaturityMonthYear(trade.Maturity))
+
+        self.SocketInitiator.application.send(cancel)
 
     def send(self, order):
         orderId = self.SocketInitiator.application.genOrderID()
@@ -105,6 +168,12 @@ class FixClient(object):
             trade.setField(order.Price)
 
         self.SocketInitiator.application.send(trade)
+
+        ordType = OrderType.Limit if isinstance(order, FutureLimitOrder) else OrderType.Market
+        ordSide = OrderSide.Buy if isinstance(order, BuyOrder) else OrderSide.Sell
+        price = order.Price.getValue() if isinstance(order, FutureLimitOrder) else None
+        return Trade(orderId, order.Symbol.getString(), order.Maturity.getString(), order.Quantity.getValue(),
+                     ordType, ordSide, price)
 
     def start(self):
         self.Logger.info("Open FIX Connection")
@@ -170,7 +239,8 @@ class MessageStore(Observable):
             sndTime = fix.SendingTime()
             message.getHeader().getField(sndTime)
             return sndTime.getString()
-        if val == fix.MsgType_NewOrderSingle or val == fix.MsgType_ExecutionReport:
+        if val == fix.MsgType_NewOrderSingle or val == fix.MsgType_ExecutionReport \
+                or val == fix.MsgType_OrderCancelRequest:
             transTime = fix.TransactTime()
             message.getField(transTime)
             return transTime.getString()
@@ -197,7 +267,8 @@ class MessageStore(Observable):
             sequence = fix.MsgSeqNum()
             message.getHeader().getField(sequence)
             return '%s_%s' % (fix.MsgType_Heartbeat, sequence.getValue())
-        if msgType.getValue() == fix.MsgType_NewOrderSingle or msgType.getValue() == fix.MsgType_ExecutionReport:
+        if msgType.getValue() == fix.MsgType_NewOrderSingle or msgType.getValue() == fix.MsgType_ExecutionReport \
+                or msgType.getValue() == fix.MsgType_OrderCancelRequest:
             cId = fix.ClOrdID()
             message.getField(cId)
             return cId.getValue()
@@ -236,6 +307,7 @@ class GainApplication(fix.Application):
         self.Notifier = Observable()
         self.Settings = settings
         self.sessionID = ''
+        self.FixClientRef = None
         self.orderID = int(calendar.timegm(time.gmtime()))
         self.Logger = logger
         self._lock = threading.RLock()
@@ -288,10 +360,50 @@ class GainApplication(fix.Application):
             self.Logger.error('Error in fromAdmin', e)
         return
 
+    def __unpackMessage(self, message):
+        msgType = fix.MsgType()
+        message.getHeader().getField(msgType)
+        if msgType.getValue() == fix.MsgType_ExecutionReport:
+            cId = fix.ClOrdID()
+            message.getField(cId)
+            fixStatus = fix.OrdStatus()
+            message.getField(fixStatus)
+            price = fix.AvgPx()
+            message.getField(price)
+            qty = fix.OrderQty()
+            message.getField(qty)
+            side = fix.Side()
+            message.getField(side)
+            symbol = fix.Symbol()
+            message.getField(symbol)
+            orderSide = None
+            origOrderId = None
+            if side.getValue() == fix.Side_BUY:
+                orderSide = OrderSide.Buy
+            elif side.getValue() == fix.Side_SELL:
+                orderSide = OrderSide.Sell
+            status = None
+            if fixStatus.getValue() == fix.OrdStatus_NEW:
+                status = OrderStatus.New
+            elif fixStatus.getValue() == fix.OrdStatus_CANCELED:
+                status = OrderStatus.Cancelled
+                origClOrdID = fix.OrigClOrdID()
+                message.getField(origClOrdID)
+                origOrderId = origClOrdID.getValue()
+            elif fixStatus.getValue() == fix.OrdStatus_FILLED:
+                status = OrderStatus.Filled
+            elif fixStatus.getValue() == fix.OrdStatus_REJECTED:
+                status = OrderStatus.Rejected
+            if status is not None:
+                self.Notifier.notifyMsgHandlers(ClientOrderId=cId.getValue(), Symbol=symbol.getValue(),
+                                                AvgPx=price.getValue(), Quantity=qty.getValue(), Side=orderSide,
+                                                Status=status, OrigClOrdID=origOrderId, Sender=self.FixClientRef)
+
     def fromApp(self, message, sessionID):
         try:
             self.Logger.info("Received Application message from server. Session: %s. Message: %s" % (sessionID, message))
             self.__messageStore.addResponse(message)
+            self.__unpackMessage(message)
         except fix.RuntimeError, e:
             self.Logger.error('Error in fromApp', e)
         return
