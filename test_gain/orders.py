@@ -14,6 +14,8 @@ logger = logging.getLogger()
 def OrderNotificationReceived(event):
     logger.info('OrderId: %s Status: %s Side: %s' % (event.ClientOrderId, event.Status, event.Side))
     logger.info('Symbol: %s AvgPx: %s Quantity: %s' % (event.Symbol, event.AvgPx, event.Quantity))
+    if event.Status == gain.OrderStatus.CancelRejected:
+        logger.error('Cancel Order failed. OrigClOrdID %s' % event.OrigClOrdID)
     if event.Status == gain.OrderStatus.Cancelled:
         pending_cancels.put(event)
         pending_cancels.task_done()
@@ -27,7 +29,6 @@ def OrderNotificationReceived(event):
 
 def limitTrader(client):
     while True:
-
         order = gain.SellFutureLimitOrder('6E', '201707', 1, 2)
         trade = client.send(order)
         try:
@@ -45,7 +46,6 @@ def limitTrader(client):
 
 def marketTrader(client):
     while True:
-
         order = gain.BuyFutureMarketOrder('6E', '201707', 1)
         trade = client.send(order)
         try:

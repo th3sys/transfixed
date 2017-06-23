@@ -12,7 +12,8 @@ class OrderStatus(Enum):
     New = 1,
     Filled = 2,
     Cancelled = 3,
-    Rejected = 4
+    Rejected = 4,
+    CancelRejected = 5
 
 
 class OrderSide(Enum):
@@ -240,7 +241,7 @@ class MessageStore(Observable):
             message.getHeader().getField(sndTime)
             return sndTime.getString()
         if val == fix.MsgType_NewOrderSingle or val == fix.MsgType_ExecutionReport \
-                or val == fix.MsgType_OrderCancelRequest:
+                or val == fix.MsgType_OrderCancelRequest or val == fix.MsgType_OrderCancelReject:
             transTime = fix.TransactTime()
             message.getField(transTime)
             return transTime.getString()
@@ -268,7 +269,8 @@ class MessageStore(Observable):
             message.getHeader().getField(sequence)
             return '%s_%s' % (fix.MsgType_Heartbeat, sequence.getValue())
         if msgType.getValue() == fix.MsgType_NewOrderSingle or msgType.getValue() == fix.MsgType_ExecutionReport \
-                or msgType.getValue() == fix.MsgType_OrderCancelRequest:
+                or msgType.getValue() == fix.MsgType_OrderCancelRequest \
+                or msgType.getValue() == fix.MsgType_OrderCancelReject:
             cId = fix.ClOrdID()
             message.getField(cId)
             return cId.getValue()
@@ -363,7 +365,15 @@ class GainApplication(fix.Application):
     def __unpackMessage(self, message):
         msgType = fix.MsgType()
         message.getHeader().getField(msgType)
-        if msgType.getValue() == fix.MsgType_ExecutionReport:
+        if msgType.getValue() == fix.MsgType_OrderCancelReject:
+            cId = fix.ClOrdID()
+            message.getField(cId)
+            origClOrdID = fix.OrigClOrdID()
+            message.getField(origClOrdID)
+            self.Notifier.notifyMsgHandlers(ClientOrderId=cId.getValue(), Symbol=None,
+                                            AvgPx=None, Quantity=None, Side=None, Status=OrderStatus.CancelRejected,
+                                            OrigClOrdID=origClOrdID.getValue(), Sender=self.FixClientRef)
+        elif msgType.getValue() == fix.MsgType_ExecutionReport:
             cId = fix.ClOrdID()
             message.getField(cId)
             fixStatus = fix.OrdStatus()
