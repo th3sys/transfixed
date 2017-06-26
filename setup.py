@@ -4,12 +4,12 @@ from os import path
 
 here = path.abspath(path.dirname(__file__))
 
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
     name='transfixed',
-    version='1.0.0',
+    version='0.0.1',
     description='FIX TRADING LIBRARY',
     long_description=long_description,
     url='https://github.com/th3sys/transfixed',
@@ -22,13 +22,13 @@ setup(
         'Programming Language :: Python :: 3.6'
     ],
 
-    keywords='gain futures cqg fix protocol trading',
+    keywords='gain capital futures cqg quickfix fix protocol trading',
 
     packages=find_packages(exclude=['transfixed.egg-info', 'test_gain']),
 
     install_requires=['quickfix', 'python-dateutil', 'future', 'gevent'],
 
     package_data={
-        'transfixed': ['fix/FIX42.xml', 'gain_config.ini', 'cqg_config.ini'],
+        'transfixed': ['fix/FIX42.xml', 'fix/FIX44.xml', 'gain_config.ini', 'cqg_config.ini'],
     },
 )
