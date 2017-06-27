@@ -3,7 +3,7 @@ import quickfix44 as fix44
 from enum import Enum
 import logging
 import threading
-from dateutil import parser
+from datetime import datetime
 import calendar
 import time
 
@@ -222,9 +222,13 @@ class MessageStore(Observable):
         self.__lock = threading.RLock()
         self.__latency = int(self.Settings.get().getString('MaxLatency'))
 
+    @staticmethod
+    def parse(date):
+        return datetime.strptime(date, '%Y%m%d-%H:%M:%S.%f' if '.' in date else '%Y%m%d-%H:%M:%S')
+
     def __timeCheck(self, request, response):
-        requestTime = parser.parse(request)
-        responseTime = parser.parse(response)
+        requestTime = MessageStore.parse(request)
+        responseTime = MessageStore.parse(response)
         delta = responseTime - requestTime if responseTime > requestTime else requestTime - responseTime
         lag_in_seconds = (delta.seconds*1000 + delta.microseconds/1000.0)/1000.0
         if lag_in_seconds > self.__latency:

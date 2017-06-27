@@ -9,7 +9,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='transfixed',
-    version='0.0.1',
+    version='0.0.3',
     description='FIX TRADING LIBRARY',
     long_description=long_description,
     url='https://github.com/th3sys/transfixed',
@@ -26,7 +26,7 @@ setup(
 
     packages=find_packages(exclude=['transfixed.egg-info', 'test_gain']),
 
-    install_requires=['quickfix', 'python-dateutil', 'future', 'gevent'],
+    install_requires=['quickfix'],
 
     package_data={
         'transfixed': ['fix/FIX42.xml', 'fix/FIX44.xml', 'gain_config.ini', 'cqg_config.ini'],
