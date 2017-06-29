@@ -32,7 +32,7 @@ def main():
             gevent.spawn(poll()),
         ])
 
-    except (fix.ConfigError, fix.RuntimeError), e:
+    except (fix.ConfigError, fix.RuntimeError) as e:
         logger.error(e)
 
 

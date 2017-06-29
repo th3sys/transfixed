@@ -12,7 +12,7 @@ class Application(fix.Application):
 
     def genOrderID(self):
         Application.orderID = Application.orderID+1
-        return `Application.orderID`
+        return repr(Application.orderID)
 
     def genExecID(self):
         Application.execID += 1
@@ -34,7 +34,7 @@ class Application(fix.Application):
         print('toAdmin')
         sndTime = fix.SendingTime()
         message.getHeader().getField(sndTime)
-        print(sndTime.getString())
+        print((sndTime.getString()))
         return
 
     def fromAdmin(self, message, sessionID):
@@ -124,7 +124,7 @@ class Application(fix.Application):
                 executionReport.setField(fix.ExecType(fix.ExecType_TRADE))
                 fix.Session.sendToTarget(executionReport, sessionID)
 
-        except fix.SessionNotFound, e:
+        except fix.SessionNotFound as e:
             return
 
 
@@ -137,13 +137,13 @@ def main(file_name):
         logFactory = fix.FileLogFactory(settings)
 
         acceptor = fix.SocketAcceptor(application, storeFactory, settings, logFactory)
-        print 'starting acceptor'
+        print('starting acceptor')
         acceptor.start()
 
         while 1:
             time.sleep(1)
-    except (fix.ConfigError, fix.RuntimeError), e:
-        print e
+    except (fix.ConfigError, fix.RuntimeError) as e:
+        print(e)
 
 if __name__ == '__main__':
     main('executor.ini')

@@ -206,7 +206,7 @@ class Observable(object):
     def notifyMsgHandlers(self, **kwargs):
         e = FixEvent()
         e.source = self
-        for k, v in kwargs.items():
+        for k, v in list(kwargs.items()):
             setattr(e, k, v)
         for fn in self.__callbacks:
             fn(e)
@@ -346,7 +346,7 @@ class GainApplication(fix.Application):
                 message.getHeader().setField(fix.StringField(12003, uuid))
             self.Logger.info("Sending Admin message to server. Session: %s. Message: %s" % (sessionID, message))
             self.__messageStore.addRequest(message)
-        except fix.RuntimeError, e:
+        except fix.RuntimeError as e:
             self.Logger.error('Error in toAdmin', e)
         return
 
@@ -354,7 +354,7 @@ class GainApplication(fix.Application):
         try:
             self.Logger.info("Sending Application message to server. Session: %s. Message: %s" % (sessionID, message))
             self.__messageStore.addRequest(message)
-        except fix.RuntimeError, e:
+        except fix.RuntimeError as e:
             self.Logger.error('Error in toApp', e)
         return
 
@@ -362,7 +362,7 @@ class GainApplication(fix.Application):
         try:
             self.Logger.info("Received Admin message from server. Session: %s. Message: %s" % (sessionID, message))
             self.__messageStore.addResponse(message)
-        except fix.RuntimeError, e:
+        except fix.RuntimeError as e:
             self.Logger.error('Error in fromAdmin', e)
         return
 
@@ -418,7 +418,7 @@ class GainApplication(fix.Application):
             self.Logger.info("Received Application message from server. Session: %s. Message: %s" % (sessionID, message))
             self.__messageStore.addResponse(message)
             self.__unpackMessage(message)
-        except fix.RuntimeError, e:
+        except fix.RuntimeError as e:
             self.Logger.error('Error in fromApp', e)
         return
 

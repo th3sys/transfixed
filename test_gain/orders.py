@@ -76,7 +76,7 @@ def main():
         traderB.join()
         client.stop()
 
-    except (fix.ConfigError, fix.RuntimeError), e:
+    except (fix.ConfigError, fix.RuntimeError) as e:
         logger.error(e)
 
 
