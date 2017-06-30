@@ -26,7 +26,7 @@ setup(
 
     packages=find_packages(exclude=['transfixed.egg-info', 'test_gain']),
 
-    install_requires=['quickfix'],
+    install_requires=['quickfix', 'enum', 'future'],
 
     package_data={
         'transfixed': ['fix/FIX42.xml', 'fix/FIX44.xml', 'gain_config.ini', 'cqg_config.ini'],
