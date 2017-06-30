@@ -9,7 +9,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='transfixed',
-    version='0.0.3',
+    version='0.0.4',
     description='FIX TRADING LIBRARY',
     long_description=long_description,
     url='https://github.com/th3sys/transfixed',
