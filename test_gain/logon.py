@@ -10,7 +10,7 @@ client = None
 
 def start():
     global client
-    client = gain.FixClient.Create(logger, 'config.ini')
+    client = gain.FixClient.Create(logger, 'config.ini', True)
     client.start()
 
 

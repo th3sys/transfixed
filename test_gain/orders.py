@@ -58,7 +58,7 @@ def marketTrader(client):
 
 def main():
     try:
-        client = gain.FixClient.Create(logger, 'config.ini')
+        client = gain.FixClient.Create(logger, 'config.ini', False)
         client.addOrderListener(OrderNotificationReceived)
         client.start()
 

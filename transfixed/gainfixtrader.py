@@ -107,13 +107,13 @@ class FixClient(object):
         self.Logger = logger
 
     @classmethod
-    def Create(cls, logger, config):
+    def Create(cls, logger, config, storeMessages):
         logger.setLevel(logging.INFO)
         logging.basicConfig(format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
         settings = fix.SessionSettings(config)
         application = GainApplication(settings, logger)
-        storeFactory = fix.FileStoreFactory(settings)
-        logFactory = fix.FileLogFactory(settings)
+        storeFactory = fix.FileStoreFactory(settings) if storeMessages else fix.MemoryStoreFactory()
+        logFactory = fix.FileLogFactory(settings) if storeMessages else None
         init = fix.SocketInitiator(application, storeFactory, settings, logFactory)
         client = FixClient(init, logger)
         application.FixClientRef = client
