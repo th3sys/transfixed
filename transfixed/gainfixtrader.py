@@ -179,6 +179,9 @@ class FixClient(object):
     def start(self):
         self.Logger.info("Open FIX Connection")
         self.SocketInitiator.start()
+        while not self.SocketInitiator.application.connected:
+            self.Logger.info('Waiting to logon ...')
+            self.SocketInitiator.application.connection_trigger.wait(2)
 
     def stop(self):
         self.Logger.info("Close FIX Connection")
@@ -317,7 +320,8 @@ class GainApplication(fix.Application):
         self.orderID = int(calendar.timegm(time.gmtime()))
         self.Logger = logger
         self._lock = threading.RLock()
-        self.__connected = False
+        self.connection_trigger = threading.Event()
+        self.connected = False
         self.__latency = int(self.Settings.get().getString('MaxLatency'))
 
     def onCreate(self, sessionID):
@@ -326,13 +330,15 @@ class GainApplication(fix.Application):
 
     def onLogon(self, sessionID):
         self.sessionID = sessionID
-        self.__connected = True
+        self.connected = True
         self.Logger.info("onLogon received from server. Session: %s" % sessionID)
+        self.connection_trigger.set()
         return
 
     def onLogout(self, sessionID):
-        self.__connected = False
+        self.connected = False
         self.Logger.info("onLogout received from server. Session: %s" % sessionID)
+        self.connection_trigger.clear()
         return
 
     def toAdmin(self, message, sessionID):
@@ -423,11 +429,15 @@ class GainApplication(fix.Application):
         return
 
     def send(self, message):
-        if self.__connected:
+        if self.connected:
             self.Logger.info("FixClient is sending: %s" % message.getHeader().getField(fix.MsgType()))
             fix.Session.sendToTarget(message, self.sessionID)
         else:
             self.Logger.error('Session Not Found. Not connected to FIX engine')
+            while not self.connected:
+                self.Logger.info('Waiting to reconnect ...')
+                self.connection_trigger.wait(2)
+            self.send(message)
         return
 
     def genOrderID(self):
