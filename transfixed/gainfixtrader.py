@@ -1,6 +1,5 @@
 import quickfix as fix
 import quickfix44 as fix44
-from enum import Enum
 import logging
 import threading
 from datetime import datetime
@@ -8,22 +7,28 @@ import calendar
 import time
 
 
-class OrderStatus(Enum):
-    New = 1,
-    Filled = 2,
-    Cancelled = 3,
-    Rejected = 4,
-    CancelRejected = 5
+class Notify:
+    Latency = 'Latency'
+    Order = 'Order'
+    Account = 'Account'
 
 
-class OrderSide(Enum):
-    Buy = 1
-    Sell = 2
+class OrderStatus:
+    New = 'New'
+    Filled = 'Filled'
+    Cancelled = 'Cancelled'
+    Rejected = 'Rejected'
+    CancelRejected = 'CancelRejected'
 
 
-class OrderType(Enum):
-    Limit = 1
-    Market = 2
+class OrderSide:
+    Buy = 'Buy'
+    Sell = 'Sell'
+
+
+class OrderType:
+    Limit = 'Limit'
+    Market = 'Market'
 
 
 class Trade(object):
@@ -129,7 +134,7 @@ class FixClient(object):
         self.SocketInitiator.application.send(message)
 
     def addOrderListener(self, callback):
-        self.SocketInitiator.application.Notifier.addMessageHandler(callback)
+        self.SocketInitiator.application.Notifier.addMessageHandler(Notify.Order, callback)
 
     def cancel(self, trade):
         orderId = self.SocketInitiator.application.genOrderID()
@@ -192,27 +197,33 @@ class FixClient(object):
 class Observable(object):
     def __init__(self):
         super(Observable, self).__init__()
-        self.__callbacks = []
+        self.__callbacks = {}
 
-    def addMessageHandler(self, callback):
-        if callback not in self.__callbacks:
-            self.__callbacks.append(callback)
+    def addMessageHandler(self, name, callback):
+        if name in self.__callbacks:
+            handlers = self.__callbacks[name]
+            if callback not in handlers:
+                handlers.append(callback)
+        else:
+            self.__callbacks[name] = [callback]
 
-    def removeMsgHandler(self, callback):
-        if callback in self.__callbacks:
-            self.__callbacks.remove(callback)
+    def removeMsgHandler(self, name, callback):
+        if name in self.__callbacks and callback in self.__callbacks[name]:
+            self.__callbacks[name].remove(callback)
 
     def removeAllMsgHandler(self):
-        if self.__callbacks:
-            del self.__callbacks[:]
+        for key in self.__callbacks:
+            if self.__callbacks[key]:
+                del self.__callbacks[key][:]
 
-    def notifyMsgHandlers(self, **kwargs):
+    def notifyMsgHandlers(self, name, **kwargs):
         e = FixEvent()
         e.source = self
         for k, v in list(kwargs.items()):
             setattr(e, k, v)
-        for fn in self.__callbacks:
-            fn(e)
+        if name in self.__callbacks:
+            for fn in self.__callbacks[name]:
+                fn(e)
 
 
 class MessageStore(Observable):
@@ -235,7 +246,7 @@ class MessageStore(Observable):
         delta = responseTime - requestTime if responseTime > requestTime else requestTime - responseTime
         lag_in_seconds = (delta.seconds*1000 + delta.microseconds/1000.0)/1000.0
         if lag_in_seconds > self.__latency:
-            self.notifyMsgHandlers(MaxLatency=self.__latency, CurrentTimeLag=lag_in_seconds)
+            self.notifyMsgHandlers(Notify.Latency, MaxLatency=self.__latency, CurrentTimeLag=lag_in_seconds)
             self.Logger.error("Max Latency exceeded for messages: %s %s" % (request, response))
 
     @staticmethod
@@ -284,7 +295,7 @@ class MessageStore(Observable):
         return None
 
     def addTimeLagListener(self, callback):
-        self.addMessageHandler(callback)
+        self.addMessageHandler(Notify.Latency, callback)
 
     def addRequest(self, message):
         key = MessageStore.__uncorkKey(message)
@@ -380,7 +391,7 @@ class GainApplication(fix.Application):
             message.getField(cId)
             origClOrdID = fix.OrigClOrdID()
             message.getField(origClOrdID)
-            self.Notifier.notifyMsgHandlers(ClientOrderId=cId.getValue(), Symbol=None,
+            self.Notifier.notifyMsgHandlers(Notify.Order, ClientOrderId=cId.getValue(), Symbol=None,
                                             AvgPx=None, Quantity=None, Side=None, Status=OrderStatus.CancelRejected,
                                             OrigClOrdID=origClOrdID.getValue(), Sender=self.FixClientRef)
         elif msgType.getValue() == fix.MsgType_ExecutionReport:
@@ -415,7 +426,7 @@ class GainApplication(fix.Application):
             elif fixStatus.getValue() == fix.OrdStatus_REJECTED:
                 status = OrderStatus.Rejected
             if status is not None:
-                self.Notifier.notifyMsgHandlers(ClientOrderId=cId.getValue(), Symbol=symbol.getValue(),
+                self.Notifier.notifyMsgHandlers(Notify.Order, ClientOrderId=cId.getValue(), Symbol=symbol.getValue(),
                                                 AvgPx=price.getValue(), Quantity=qty.getValue(), Side=orderSide,
                                                 Status=status, OrigClOrdID=origOrderId, Sender=self.FixClientRef)
 
