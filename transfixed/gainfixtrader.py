@@ -7,6 +7,11 @@ import calendar
 import time
 
 
+class AccountInquiry:
+    CollateralInquiry = 'CollateralInquiry'
+    RequestForPositions = 'RequestForPositions'
+
+
 class Notify:
     Latency = 'Latency'
     Order = 'Order'
@@ -133,6 +138,9 @@ class FixClient(object):
         message = fix44.Logout()
         self.SocketInitiator.application.send(message)
 
+    def addAccountInquiryListener(self, callback):
+        self.SocketInitiator.application.Notifier.addMessageHandler(Notify.Account, callback)
+
     def addOrderListener(self, callback):
         self.SocketInitiator.application.Notifier.addMessageHandler(Notify.Order, callback)
 
@@ -153,6 +161,33 @@ class FixClient(object):
         cancel.setField(fix.MaturityMonthYear(trade.Maturity))
 
         self.SocketInitiator.application.send(cancel)
+
+    def requestForPositions(self):
+        clrDate = datetime.now().strftime("%Y%m%d")
+        inqId = self.SocketInitiator.application.genInquiryID()
+        account = self.SocketInitiator.application.Settings.get().getString('Account')
+        message = fix44.RequestForPositions()
+        message.setField(fix.Account(account))
+        message.setField(fix.TransactTime())
+        message.setField(fix.AccountType(fix.AccountType_ACCOUNT_IS_CARRIED_ON_CUSTOMER_SIDE_OF_BOOKS))
+        message.setField(fix.ClearingBusinessDate(clrDate))
+        message.setField(fix.PosReqType(fix.PosReqType_POSITIONS))
+        message.setField(fix.PosReqID(inqId))
+
+        self.SocketInitiator.application.send(message)
+
+        return inqId
+
+    def collateralInquiry(self):
+        inqId = self.SocketInitiator.application.genInquiryID()
+        account = self.SocketInitiator.application.Settings.get().getString('Account')
+        message = fix44.CollateralInquiry()
+        message.setField(fix.Account(account))
+        message.setField(fix.CollInquiryID(inqId))
+
+        self.SocketInitiator.application.send(message)
+
+        return inqId
 
     def send(self, order):
         orderId = self.SocketInitiator.application.genOrderID()
@@ -263,6 +298,10 @@ class MessageStore(Observable):
             transTime = fix.TransactTime()
             message.getField(transTime)
             return transTime.getString()
+        if val == fix.MsgType_CollateralInquiry or val == fix.MsgType_CollateralReport \
+                or val == fix.MsgType_RequestForPositions or val == fix.MsgType_PositionReport \
+                or val == fix.MsgType_RequestForPositionsAck:
+            return datetime.now().strftime("%Y%m%d-%H:%M:%S")
         return None
 
     @staticmethod
@@ -292,6 +331,15 @@ class MessageStore(Observable):
             cId = fix.ClOrdID()
             message.getField(cId)
             return cId.getValue()
+        if msgType.getValue() == fix.MsgType_CollateralInquiry or msgType.getValue() == fix.MsgType_CollateralReport:
+            colId = fix.CollInquiryID()
+            message.getField(colId)
+            return colId.getValue()
+        if msgType.getValue() == fix.MsgType_RequestForPositions or msgType.getValue() == fix.MsgType_PositionReport \
+                or msgType.getValue() == fix.MsgType_RequestForPositionsAck:
+            posId = fix.PosReqID()
+            message.getField(posId)
+            return posId.getValue()
         return None
 
     def addTimeLagListener(self, callback):
@@ -329,6 +377,7 @@ class GainApplication(fix.Application):
         self.sessionID = ''
         self.FixClientRef = None
         self.orderID = int(calendar.timegm(time.gmtime()))
+        self.inquiryID = int(calendar.timegm(time.gmtime()))
         self.Logger = logger
         self._lock = threading.RLock()
         self.connection_trigger = threading.Event()
@@ -386,7 +435,58 @@ class GainApplication(fix.Application):
     def __unpackMessage(self, message):
         msgType = fix.MsgType()
         message.getHeader().getField(msgType)
-        if msgType.getValue() == fix.MsgType_OrderCancelReject:
+        if msgType.getValue() == fix.MsgType_RequestForPositionsAck:
+            account = fix.Account()
+            message.getField(account)
+            posId = fix.PosReqID()
+            message.getField(posId)
+            self.Notifier.notifyMsgHandlers(Notify.Account, Account=account.getValue(), PosReqID=posId.getValue(),
+                                            Symbol=None, Maturity=None,
+                                            NoPositions=0,
+                                            LongQty=0, ShortQty=0,
+                                            PosAmt=0, SettlPrice=0,
+                                            NoPosAmt=0, ClearingBusinessDate=None,
+                                            AccountInquiry=AccountInquiry.RequestForPositions)
+        elif msgType.getValue() == fix.MsgType_PositionReport:
+            account = fix.Account()
+            message.getField(account)
+            posId = fix.PosReqID()
+            message.getField(posId)
+            symbol = fix.Symbol()
+            message.getField(symbol)
+            maturity = fix.MaturityMonthYear()
+            message.getField(maturity)
+            noPositions = fix.NoPositions()
+            message.getField(noPositions)
+            longQty = fix.LongQty()
+            message.getField(longQty)
+            shortQty = fix.ShortQty()
+            message.getField(shortQty)
+            posAmt = fix.PosAmt()
+            message.getField(posAmt)
+            cBusDate = fix.ClearingBusinessDate()
+            message.getField(cBusDate)
+            settlePrice = fix.SettlPrice()
+            message.getField(settlePrice)
+            noPosAmt = fix.NoPosAmt()
+            message.getField(noPosAmt)
+            self.Notifier.notifyMsgHandlers(Notify.Account, Account=account.getValue(), PosReqID=posId.getValue(),
+                Symbol=symbol.getValue(), Maturity=maturity.getValue(), NoPositions=noPositions.getValue(),
+                LongQty=longQty.getValue(), ShortQty = shortQty.getValue(), PosAmt=posAmt.getValue(),SettlPrice=settlePrice.getValue(),
+                NoPosAmt=noPosAmt.getValue(), ClearingBusinessDate=cBusDate.getValue(), AccountInquiry=AccountInquiry.RequestForPositions)
+        elif msgType.getValue() == fix.MsgType_CollateralReport:
+            account = fix.Account()
+            message.getField(account)
+            ccy = fix.Currency()
+            message.getField(ccy)
+            csh = fix.CashOutstanding()
+            message.getField(csh)
+            colId = fix.CollInquiryID()
+            message.getField(colId)
+            self.Notifier.notifyMsgHandlers(Notify.Account, Account=account.getValue(), Currency=ccy.getValue(),
+                                            Balance=csh.getValue(), CollInquiryID=colId.getValue(),
+                                            AccountInquiry=AccountInquiry.CollateralInquiry)
+        elif msgType.getValue() == fix.MsgType_OrderCancelReject:
             cId = fix.ClOrdID()
             message.getField(cId)
             origClOrdID = fix.OrigClOrdID()
@@ -455,3 +555,8 @@ class GainApplication(fix.Application):
         with self._lock:
             self.orderID += 1
             return str(self.orderID)
+
+    def genInquiryID(self):
+        with self._lock:
+            self.inquiryID += 1
+            return 'INQ%s' % str(self.inquiryID)

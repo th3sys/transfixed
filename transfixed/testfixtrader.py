@@ -17,6 +17,15 @@ class FixTrader:
         self.PendingConfOrders = Queue()
         self.ConfirmedTrades = Queue()
 
+    def AccountInquiryReceived(self, event):
+        if event.AccountInquiry == gain.AccountInquiry.CollateralInquiry:
+            self.Logger.info('CollInquiryID: %s Account: %s' % (event.CollInquiryID, event.Account))
+            self.Logger.info('Balance: %s Currency: %s' % (event.Balance, event.Currency))
+        elif event.AccountInquiry == gain.AccountInquiry.RequestForPositions:
+            self.Logger.info('PosReqID: %s Account: %s' % (event.PosReqID, event.Account))
+            self.Logger.info('Quantity: %s Amount: %s' % (event.LongQty - event.ShortQty, event.PosAmt))
+        self.Logger.info('account request notification received')
+
     def OrderNotificationReceived(self, event):
         self.Logger.info('OrderId: %s Status: %s Side: %s' % (event.ClientOrderId, event.Status, event.Side))
         self.Logger.info('Symbol: %s AvgPx: %s Quantity: %s' % (event.Symbol, event.AvgPx, event.Quantity))
@@ -37,7 +46,10 @@ class FixTrader:
     def Loop(self):
         client = gain.FixClient.Create(self.Logger, 'config.ini', False)
         client.addOrderListener(self.OrderNotificationReceived)
+        client.addAccountInquiryListener(self.AccountInquiryReceived)
         client.start()
+        client.collateralInquiry()
+        client.requestForPositions()
         while self.Run:
             try:
                 order = self.ReceivedOrders.get(True, 5)
