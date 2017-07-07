@@ -42,7 +42,8 @@ Copy the FIX directory with FIX dictionary and the ``config.ini`` into your appl
 
 
 1. Login, send market orders, limit orders and cancels and receive the execution report using ``threading``:
-::
+
+.. code:: python
 
 	import quickfix as fix
 	from transfixed import gainfixtrader as gain
@@ -139,7 +140,7 @@ Copy the FIX directory with FIX dictionary and the ``config.ini`` into your appl
 
 2. Login and count heartbeats using ``gevent``:
 
-::
+.. code:: python
 
 	import quickfix as fix
 	from transfixed import gainfixtrader as gain
@@ -186,7 +187,7 @@ Copy the FIX directory with FIX dictionary and the ``config.ini`` into your appl
 
 3. Send orders, receive reports, check account balance and send for position report:
 
-::
+.. code:: python
 
 	import quickfix as fix
 	from transfixed import gainfixtrader as gain
