@@ -24,7 +24,7 @@ setup(
 
     keywords='gain capital futures cqg quickfix fix protocol trading',
 
-    packages=find_packages(exclude=['transfixed.egg-info', 'test_gain']),
+    packages=find_packages(exclude=['transfixed.egg-info', 'test_gain', 'use_case']),
 
     install_requires=['quickfix', 'future'],
 

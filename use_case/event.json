@@ -1,0 +1,126 @@
+{
+	"Records": [
+		{
+			"eventID": "7f8c4d2486c5a98e1fc8a872c5dbc836",
+			"eventVersion": "1.1",
+			"dynamodb": {
+				"SequenceNumber": "31200000000011351682875",
+				"Keys": {
+					"NewOrderId": {
+						"S": "c1c94c4fbf254142a7e01ecd0b8ebb83"
+					},
+					"TransactionTime": {
+						"S": "1499970241.49"
+					}
+				},
+				"SizeBytes": 259,
+				"NewImage": {
+					"Status": {
+						"S": "PENDING"
+					},
+					"ClientOrderId": {
+						"N": "0"
+					},
+					"NewOrderId": {
+						"S": "c1c94c4fbf254142a7e01ecd0b8ebb84"
+					},
+					"TransactionTime": {
+						"S": "1499970241.49"
+					},
+					"Details": {
+						"M": {
+							"OrdType": {
+								"S": "MARKET"
+							},
+							"Price": {
+								"N": "0"
+							},
+							"Side": {
+								"S": "BUY"
+							},
+							"Maturity": {
+								"S": "201707"
+							},
+							"ProductType": {
+								"S": "FUTURE"
+							},
+							"Symbol": {
+								"S": "6E"
+							},
+							"Quantity": {
+								"N": "1"
+							}
+						}
+					}
+				},
+				"ApproximateCreationDateTime": 1499970240,
+				"StreamViewType": "NEW_AND_OLD_IMAGES"
+			},
+			"awsRegion": "us-east-1",
+			"eventName": "INSERT",
+			"eventSourceARN": "arn",
+			"eventSource": "aws:dynamodb"
+		},
+		{
+			"eventID": "8ea6ca938adeb582e10ab608601df5e4",
+			"eventVersion": "1.1",
+			"dynamodb": {
+				"SequenceNumber": "31300000000011351682903",
+				"Keys": {
+					"NewOrderId": {
+						"S": "1828996a4d444c9e9e4054a9416e2121"
+					},
+					"TransactionTime": {
+						"S": "1499970242.07"
+					}
+				},
+				"SizeBytes": 259,
+				"NewImage": {
+					"Status": {
+						"S": "PENDING"
+					},
+					"ClientOrderId": {
+						"N": "0"
+					},
+					"NewOrderId": {
+						"S": "1828996a4d444c9e9e4054a9416e2121"
+					},
+					"TransactionTime": {
+						"S": "1499970242.07"
+					},
+					"Details": {
+						"M": {
+							"OrdType": {
+								"S": "MARKET"
+							},
+							"Price": {
+								"N": "0"
+							},
+							"Side": {
+								"S": "BUY"
+							},
+							"Maturity": {
+								"S": "201707"
+							},
+							"ProductType": {
+								"S": "FUTURE"
+							},
+							"Symbol": {
+								"S": "6E"
+							},
+							"Quantity": {
+								"N": "1"
+							}
+						}
+					}
+				},
+				"ApproximateCreationDateTime": 1499970240,
+				"StreamViewType": "NEW_AND_OLD_IMAGES"
+			},
+			"awsRegion": "us-east-1",
+			"eventName": "INSERT",
+			"eventSourceARN": "arn",
+			"eventSource": "aws:dynamodb"
+		}
+	]
+}
