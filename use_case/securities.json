@@ -1,0 +1,38 @@
+[
+  {
+    "Symbol" : "6E",
+    "ProductType" : "FUTURE",
+    "SubscriptionEnabled" : false,
+    "TradingEnabled" : true,
+    "Description" : {
+      "Name" : "Euro FX",
+      "Exchange" : "CME",
+      "MarketGroup" : "Currencies"
+    },
+    "Risk" : {
+      "MaxPosition": 1,
+      "Margin": {
+        "Amount" : 2310,
+        "Currency" : "USD"
+      }
+    }
+  },
+  {
+    "Symbol" : "VX",
+    "ProductType" : "FUTURE",
+    "SubscriptionEnabled" : true,
+    "TradingEnabled" : true,
+    "Description" : {
+      "Name" : "CBOE Volatility Index",
+      "Exchange" : "CFE",
+      "MarketGroup" : "Indices"
+    },
+    "Risk" : {
+      "MaxPosition": 1,
+      "Margin": {
+        "Amount" : 6215,
+        "Currency" : "USD"
+      }
+    }
+  }
+]

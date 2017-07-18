@@ -8,7 +8,31 @@ import decimal
 #dynamodb = boto3.resource('dynamodb', region_name='us-east-1', endpoint_url="http://localhost:8000")
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 
-table = dynamodb.Table('Orders')
+orders_table = dynamodb.Table('Orders')
+sec_table = dynamodb.Table('Securities')
+
+with open("securities.json") as json_file:
+    securities = json.load(json_file, parse_float = decimal.Decimal)
+    for security in securities:
+        Symbol = security['Symbol']
+        ProductType = security['ProductType']
+        SubscriptionEnabled = bool(security['SubscriptionEnabled'])
+        TradingEnabled = bool(security['TradingEnabled'])
+        Description = security['Description']
+        Risk = security['Risk']
+
+        print("Adding security:", Symbol)
+
+        sec_table.put_item(
+           Item={
+               'Symbol': Symbol,
+               'ProductType': ProductType,
+               'SubscriptionEnabled': SubscriptionEnabled,
+               'TradingEnabled':TradingEnabled,
+               'Description':Description,
+               'Risk':Risk
+            }
+        )
 
 with open("orders.json") as json_file:
     orders = json.load(json_file, parse_float = decimal.Decimal)
@@ -21,7 +45,7 @@ with open("orders.json") as json_file:
 
         print("Adding order:", NewOrderId, TransactionTime)
 
-        table.put_item(
+        orders_table.put_item(
            Item={
                'NewOrderId': NewOrderId,
                'TransactionTime': TransactionTime,
