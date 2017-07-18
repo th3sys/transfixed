@@ -2,26 +2,69 @@ import logging
 import json
 import datetime
 import decimal
+import boto3
 import trollius as asyncio
+from boto3.dynamodb.conditions import Key, Attr
+from botocore.exceptions import ClientError
 from trollius import Return, From
+
+# Helper class to convert a DynamoDB item to JSON.
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, decimal.Decimal):
+            if o % 1 > 0:
+                return float(o)
+            else:
+                return int(o)
+        return super(DecimalEncoder, self).default(o)
 
 class LambdaTrader:
     def __init__(self, logger):
         self.Logger = logger
         self.Loop = asyncio.get_event_loop()
         self.PendingOrders = asyncio.Queue(loop=self.Loop)
+        db = boto3.resource('dynamodb', region_name='us-east-1')
+        self.__Securities = db.Table('Securities')
+
+    def Send(self, future):
+        self.Logger.info('Submitting Validated order %s' % future.result())
+
+    def SendReport(self, message):
+        self.Logger.info('Send Email: %s', message)
 
     def Run(self):
         if not self.PendingOrders.empty():
-            tasks = [self.validate_symbol()]
-            self.Loop.run_until_complete(asyncio.wait(tasks))
+            validate = asyncio.ensure_future(self.validate_symbol(), loop=self.Loop)
+            tasks = asyncio.gather(*[validate])
+            self.Loop.run_until_complete(tasks)
         self.Loop.close()
 
     @asyncio.coroutine
     def validate_symbol(self):
         while not self.PendingOrders.empty():
-            queue_item = yield From(self.PendingOrders.get())
-            self.Logger.info(queue_item)
+            future = asyncio.Future()
+            future.add_done_callback(self.Send)
+            order = yield From(self.PendingOrders.get())
+            try:
+                symbol = order['Details']['M']['Symbol']['S']
+                self.Logger.info('Validating %s' % symbol)
+                response = self.__Securities.get_item(
+                    Key={
+                        'Symbol': symbol
+                    }
+                )
+            except ClientError as e:
+                self.Logger.error(e.response['Error']['Message'])
+                self.SendReport('ClientError processing NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            except Exception as e:
+                self.Logger.error(e)
+                self.SendReport('Error processing NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            else:
+                security = response['Item']
+                #self.Logger.info(json.dumps(security, indent=4, cls=DecimalEncoder))
+                if security['Symbol'] ==  symbol:
+                    future.set_result('sendme')
+
 
     # lifted from https://github.com/conor10/examples/blob/master/python/expiries/vix.py
     @staticmethod
@@ -75,7 +118,7 @@ def main(event, context):
         for record in event['Records']:
             if record['eventName'] == 'INSERT':
                 logger.info('New Order received NewOrderId: %s', record['dynamodb']['Keys']['NewOrderId'])
-                trader.PendingOrders.put_nowait(record)
+                trader.PendingOrders.put_nowait(record['dynamodb']['NewImage'])
             else:
                 logger.info('Not INSERT event is ignored')
 
