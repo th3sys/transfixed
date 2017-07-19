@@ -18,7 +18,7 @@ class DecimalEncoder(json.JSONEncoder):
                 return int(o)
         return super(DecimalEncoder, self).default(o)
 
-class LambdaTrader:
+class LambdaTrader(object):
     def __init__(self, logger):
         self.Logger = logger
         self.Loop = asyncio.get_event_loop()
@@ -26,7 +26,7 @@ class LambdaTrader:
         db = boto3.resource('dynamodb', region_name='us-east-1')
         self.__Securities = db.Table('Securities')
 
-    def Send(self, future):
+    def SendOrder(self, future):
         self.Logger.info('Submitting Validated order %s' % future.result())
 
     def SendReport(self, message):
@@ -34,36 +34,46 @@ class LambdaTrader:
 
     def Run(self):
         if not self.PendingOrders.empty():
-            validate = asyncio.ensure_future(self.validate_symbol(), loop=self.Loop)
+            validate = asyncio.ensure_future(self.validate(), loop=self.Loop)
             tasks = asyncio.gather(*[validate])
             self.Loop.run_until_complete(tasks)
         self.Loop.close()
 
     @asyncio.coroutine
-    def validate_symbol(self):
+    def validate_symbol(self, order):
+        try:
+            symbol = order['Details']['M']['Symbol']['S']
+            self.Logger.info('Validating %s' % symbol)
+            response = self.__Securities.get_item(
+                Key={
+                    'Symbol': symbol
+                }
+            )
+        except ClientError as e:
+            self.Logger.error(e.response['Error']['Message'])
+            self.SendReport('ClientError processing NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            raise Return(False)
+        except Exception as e:
+            self.Logger.error(e)
+            self.SendReport('Error processing NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            raise Return(False)
+        else:
+            # self.Logger.info(json.dumps(security, indent=4, cls=DecimalEncoder))
+            if response.has_key('Item') and response['Item']['Symbol'] == symbol and response['Item']['TradingEnabled']:
+                raise Return(True)
+            self.SendReport('Symbol is unknown or not enabled for trading %s' % symbol)
+            raise Return(False)
+
+    @asyncio.coroutine
+    def validate(self):
         while not self.PendingOrders.empty():
             future = asyncio.Future()
-            future.add_done_callback(self.Send)
+            future.add_done_callback(self.SendOrder)
             order = yield From(self.PendingOrders.get())
-            try:
-                symbol = order['Details']['M']['Symbol']['S']
-                self.Logger.info('Validating %s' % symbol)
-                response = self.__Securities.get_item(
-                    Key={
-                        'Symbol': symbol
-                    }
-                )
-            except ClientError as e:
-                self.Logger.error(e.response['Error']['Message'])
-                self.SendReport('ClientError processing NewOrderId: %s. %s' % (order['NewOrderId'], e))
-            except Exception as e:
-                self.Logger.error(e)
-                self.SendReport('Error processing NewOrderId: %s. %s' % (order['NewOrderId'], e))
-            else:
-                security = response['Item']
-                #self.Logger.info(json.dumps(security, indent=4, cls=DecimalEncoder))
-                if security['Symbol'] ==  symbol:
-                    future.set_result('sendme')
+            security = yield From(self.validate_symbol(order))
+
+            if security:
+                future.set_result('sendme')
 
 
     # lifted from https://github.com/conor10/examples/blob/master/python/expiries/vix.py
