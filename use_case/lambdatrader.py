@@ -40,6 +40,24 @@ class LambdaTrader(object):
         self.Loop.close()
 
     @asyncio.coroutine
+    def validate_maturity(self, order):
+        try:
+            maturity = order['Details']['M']['Maturity']['S']
+            year = int(maturity[:4])
+            month = int(maturity[-2:])
+            date = datetime.date(year, month, 1)
+            expiry = self.get_expiry_date(date)
+            if expiry < datetime.date.today():
+                raise Exception('%s maturity date has expired' % expiry)
+
+        except Exception as e:
+            self.Logger.error(e)
+            self.SendReport('Error validate_maturity NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            raise Return(None)
+        else:
+            raise Return(maturity)
+
+    @asyncio.coroutine
     def validate_symbol(self, order):
         try:
             symbol = order['Details']['M']['Symbol']['S']
@@ -51,18 +69,18 @@ class LambdaTrader(object):
             )
         except ClientError as e:
             self.Logger.error(e.response['Error']['Message'])
-            self.SendReport('ClientError processing NewOrderId: %s. %s' % (order['NewOrderId'], e))
-            raise Return(False)
+            self.SendReport('ClientError validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            raise Return(None)
         except Exception as e:
             self.Logger.error(e)
-            self.SendReport('Error processing NewOrderId: %s. %s' % (order['NewOrderId'], e))
-            raise Return(False)
+            self.SendReport('Error validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            raise Return(None)
         else:
             # self.Logger.info(json.dumps(security, indent=4, cls=DecimalEncoder))
             if response.has_key('Item') and response['Item']['Symbol'] == symbol and response['Item']['TradingEnabled']:
-                raise Return(True)
+                raise Return(symbol)
             self.SendReport('Symbol is unknown or not enabled for trading %s' % symbol)
-            raise Return(False)
+            raise Return(None)
 
     @asyncio.coroutine
     def validate(self):
@@ -70,9 +88,10 @@ class LambdaTrader(object):
             future = asyncio.Future()
             future.add_done_callback(self.SendOrder)
             order = yield From(self.PendingOrders.get())
-            security = yield From(self.validate_symbol(order))
+            symbol = yield From(self.validate_symbol(order))
+            maturity = yield From(self.validate_maturity(order))
 
-            if security:
+            if symbol and maturity:
                 future.set_result('sendme')
 
 
