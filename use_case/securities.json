@@ -10,6 +10,7 @@
       "MarketGroup" : "Currencies"
     },
     "Risk" : {
+      "RiskFactor":0.7,
       "MaxPosition": 1,
       "Margin": {
         "Amount" : 2310,
@@ -28,6 +29,7 @@
       "MarketGroup" : "Indices"
     },
     "Risk" : {
+      "RiskFactor":0.7,
       "MaxPosition": 1,
       "Margin": {
         "Amount" : 6215,

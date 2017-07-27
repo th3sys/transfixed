@@ -71,10 +71,13 @@ class LambdaTrader(object):
         self.FixClient.stop()
 
     @asyncio.coroutine
-    def validate_order(self, order):
+    def validate_order(self, order, security):
         try:
             side = str(order['Details']['M']['Side']['S'])
             ordType = str(order['Details']['M']['OrdType']['S'])
+            riskFactor = float(security['Risk']['RiskFactor'])
+            margin = int(security['Risk']['Margin']['Amount'])
+            marginCcy = str(security['Risk']['Margin']['Currency'])
             colReqId = self.FixClient.collateralInquiry()
             receiveColReqId, balance, ccy = self.CurrentBalance.get(True, 5)
             while colReqId != receiveColReqId:
@@ -82,7 +85,11 @@ class LambdaTrader(object):
                 self.CurrentBalance.put((receiveColReqId, balance, ccy))
                 self.CurrentBalance.task_done()
                 receiveColReqId, balance, ccy = self.CurrentBalance.get(True, 5)
-            # check balance
+            if marginCcy != ccy:
+                raise Exception('Margin Currency does not match Balance Currency for %s' % security['Symbol'])
+            if balance * riskFactor < margin:
+                raise Exception('Margin exceeded for %s. Balance: %s, RF: %s, Margin: %s'
+                                % (security['Symbol'], balance, riskFactor, margin))
         except Exception as e:
             self.Logger.error(e)
             self.SendReport('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], e))
@@ -189,7 +196,7 @@ class LambdaTrader(object):
             quantity = yield From(self.validate_quantity(order, security))
             if quantity < 1: continue
 
-            good, side = yield From(self.validate_order(order))
+            good, side = yield From(self.validate_order(order, security))
             if not good: continue
 
             future.set_result((str(side), int(quantity), str(security['Symbol']), str(maturity)))
