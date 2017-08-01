@@ -33,6 +33,7 @@ class LambdaTrader(object):
         self.CurrentPositions = Queue()
         self.CurrentBalance = Queue()
         self.SubmittedOrders = Queue()
+        self.Messages = []
         self.Loop = asyncio.get_event_loop()
         self.PendingOrders = asyncio.Queue(loop=self.Loop)
         db = boto3.resource('dynamodb', region_name='us-east-1')
@@ -76,9 +77,13 @@ class LambdaTrader(object):
             self.SubmittedOrders.task_done()
             orderId, status, price = self.SubmittedOrders.get(True, 5)
         self.Logger.info('Confirmed orderId %s. Status: %s. Price: %s. Symbol: %s' % (orderId, status, price, symbol))
-        self.SendReport('Confirmed newOrderId: %s. ClientOrderId: %s. Status: %s. Side: %s. Qty: %s. Symbol: %s. '
+        self.UpdateStatus('Confirmed newOrderId: %s. ClientOrderId: %s. Status: %s. Side: %s. Qty: %s. Symbol: %s. '
                         'Maturity: %s. Price: %s'
                         % (newOrderId, orderId, status, side, quantity, symbol, maturity, price))
+
+    def UpdateStatus(self, text):
+        self.Logger.info('To Send Email: %s', text)
+        self.Messages.append(text)
 
     def SendReport(self, text):
         try:
@@ -115,6 +120,10 @@ class LambdaTrader(object):
             validate = asyncio.ensure_future(self.validate(), loop=self.Loop)
             tasks = asyncio.gather(*[validate])
             self.Loop.run_until_complete(tasks)
+
+            report = reduce(lambda x, y: x + y, map(lambda x, y: '<br><b>%s</b>. %s\n' % (x + 1, y),
+                                                    range(len(self.Messages)), self.Messages))
+            self.SendReport(report)
         self.Loop.close()
         self.FixClient.stop()
 
@@ -140,20 +149,20 @@ class LambdaTrader(object):
                                 % (security['Symbol'], balance, riskFactor, margin))
         except Exception as e:
             self.Logger.error(e)
-            self.SendReport('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], e))
             raise Return(False, None)
         else:
             if ordType.upper() != gain.OrderType.Market.upper():
                 supported = 'Only MARKET Orders are supported'
                 self.Logger.error(supported)
-                self.SendReport('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], supported))
+                self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], supported))
                 raise Return(False, None)
             if side.upper() == gain.OrderSide.Buy.upper() or side.upper() == gain.OrderSide.Sell.upper():
                 raise Return(True, side)
             else:
                 error = 'Unknown side received. Side: %s' % side
                 self.Logger.error(error)
-                self.SendReport('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], error))
+                self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], error))
                 raise Return(False, None)
 
     @asyncio.coroutine
@@ -177,11 +186,11 @@ class LambdaTrader(object):
         except Empty:
             error = 'No reply to requestForPositions'
             self.Logger.error(error)
-            self.SendReport('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], error))
+            self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], error))
             raise Return(0)
         except Exception as e:
             self.Logger.error(e)
-            self.SendReport('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], e))
             raise Return(0)
         else:
             raise Return(quantity)
@@ -199,7 +208,7 @@ class LambdaTrader(object):
 
         except Exception as e:
             self.Logger.error(e)
-            self.SendReport('Error validate_maturity NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('Error validate_maturity NewOrderId: %s. %s' % (order['NewOrderId'], e))
             raise Return(None)
         else:
             raise Return(maturity)
@@ -216,17 +225,17 @@ class LambdaTrader(object):
             )
         except ClientError as e:
             self.Logger.error(e.response['Error']['Message'])
-            self.SendReport('ClientError validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('ClientError validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e))
             raise Return(False, None)
         except Exception as e:
             self.Logger.error(e)
-            self.SendReport('Error validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('Error validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e))
             raise Return(False, None)
         else:
             # self.Logger.info(json.dumps(security, indent=4, cls=DecimalEncoder))
             if response.has_key('Item') and response['Item']['Symbol'] == symbol and response['Item']['TradingEnabled']:
                 raise Return(True, response['Item'])
-            self.SendReport('Symbol is unknown or not enabled for trading %s' % symbol)
+            self.UpdateStatus('Symbol is unknown or not enabled for trading %s' % symbol)
             raise Return(False, None)
 
     @asyncio.coroutine
