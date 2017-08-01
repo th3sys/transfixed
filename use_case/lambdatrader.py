@@ -7,7 +7,13 @@ from queue import Queue
 from queue import Empty
 import trollius as asyncio
 from transfixed import gainfixtrader as gain
-from boto3.dynamodb.conditions import Key, Attr
+import base64
+import hmac
+import hashlib
+import os
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from botocore.exceptions import ClientError
 from trollius import Return, From
 
@@ -26,6 +32,7 @@ class LambdaTrader(object):
         self.Logger = logger
         self.CurrentPositions = Queue()
         self.CurrentBalance = Queue()
+        self.SubmittedOrders = Queue()
         self.Loop = asyncio.get_event_loop()
         self.PendingOrders = asyncio.Queue(loop=self.Loop)
         db = boto3.resource('dynamodb', region_name='us-east-1')
@@ -47,19 +54,60 @@ class LambdaTrader(object):
             self.CurrentPositions.task_done()
 
     def OrderNotificationReceived(self, event):
-        pass
+        self.Logger.info('OrderId: %s Status: %s Side: %s' % (event.ClientOrderId, event.Status, event.Side))
+        self.Logger.info('Symbol: %s AvgPx: %s Quantity: %s' % (event.Symbol, event.AvgPx, event.Quantity))
+        self.Logger.info('order notification received')
+        if event.Status == gain.OrderStatus.Filled or event.Status == gain.OrderStatus.Rejected:
+            self.SubmittedOrders.put((event.ClientOrderId, event.Status, event.AvgPx))
+            self.SubmittedOrders.task_done()
 
     def SendOrder(self, future):
-        side, quantity, symbol, maturity = future.result()
+        side, quantity, symbol, maturity, newOrderId = future.result()
         self.Logger.info('Submitting Validated order %s %s %s %s' % (side, quantity, symbol, maturity))
         if side.upper() == gain.OrderSide.Buy.upper():
             order = gain.BuyFutureMarketOrder(symbol, maturity, quantity)
         elif side.upper() == gain.OrderSide.Sell.upper():
             order = gain.SellFutureMarketOrder(symbol, maturity, quantity)
-        self.FixClient.send(order)
+        trade = self.FixClient.send(order)
+        orderId, status, price = self.SubmittedOrders.get(True, 5)
+        while trade.OrderId != orderId:
+            self.Logger.error('requests do not match orderId: %s, trade.OrderId: %s' % (orderId, trade.OrderId))
+            self.SubmittedOrders.put((orderId, status, price))
+            self.SubmittedOrders.task_done()
+            orderId, status, price = self.SubmittedOrders.get(True, 5)
+        self.Logger.info('Confirmed orderId %s. Status: %s. Price: %s. Symbol: %s' % (orderId, status, price, symbol))
+        self.SendReport('Confirmed newOrderId: %s. ClientOrderId: %s. Status: %s. Side: %s. Qty: %s. Symbol: %s. '
+                        'Maturity: %s. Price: %s'
+                        % (newOrderId, orderId, status, side, quantity, symbol, maturity, price))
 
-    def SendReport(self, message):
-        self.Logger.info('Send Email: %s', message)
+    def SendReport(self, text):
+        try:
+            self.Logger.info('Send Email: %s', text)
+
+            def hash_smtp_pass_from_secret_key(key):
+                message = "SendRawEmail"
+                version = '\x02'
+                h = hmac.new(key, message, digestmod=hashlib.sha256)
+                return base64.b64encode("{0}{1}".format(version, h.digest()))
+
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = 'Lambda FIX Trader report'
+            msg['From'] = os.environ['email_address']
+            msg['To'] = os.environ['email_address']
+            mime_text = MIMEText(text, 'html')
+            msg.attach(mime_text)
+
+            server = smtplib.SMTP('email-smtp.us-east-1.amazonaws.com', 587, timeout=10)
+            server.set_debuglevel(10)
+            server.starttls()
+            server.ehlo()
+            server.login(os.environ['aws_access_key_id'],
+                         hash_smtp_pass_from_secret_key(os.environ['aws_secret_access_key']))
+            server.sendmail(os.environ['email_address'], os.environ['email_address'], msg.as_string())
+            res = server.quit()
+            self.Logger.info(res)
+        except Exception as e:
+            self.Logger.error(e)
 
     def Run(self):
         self.FixClient.start()
@@ -199,7 +247,7 @@ class LambdaTrader(object):
             good, side = yield From(self.validate_order(order, security))
             if not good: continue
 
-            future.set_result((str(side), int(quantity), str(security['Symbol']), str(maturity)))
+            future.set_result((str(side), int(quantity), str(security['Symbol']), str(maturity), order['NewOrderId']))
 
 
     # lifted from https://github.com/conor10/examples/blob/master/python/expiries/vix.py
