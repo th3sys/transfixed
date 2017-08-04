@@ -38,6 +38,7 @@ class LambdaTrader(object):
         self.PendingOrders = asyncio.Queue(loop=self.Loop)
         db = boto3.resource('dynamodb', region_name='us-east-1')
         self.__Securities = db.Table('Securities')
+        self.__Orders = db.Table('Orders')
         self.FixClient = gain.FixClient.Create(self.Logger, 'config.ini', False)
         self.FixClient.addOrderListener(self.OrderNotificationReceived)
         self.FixClient.addAccountInquiryListener(self.AccountInquiryReceived)
@@ -63,7 +64,7 @@ class LambdaTrader(object):
             self.SubmittedOrders.task_done()
 
     def SendOrder(self, future):
-        side, quantity, symbol, maturity, newOrderId = future.result()
+        side, quantity, symbol, maturity, newOrderId, transactionTime = future.result()
         self.Logger.info('Submitting Validated order %s %s %s %s' % (side, quantity, symbol, maturity))
         if side.upper() == gain.OrderSide.Buy.upper():
             order = gain.BuyFutureMarketOrder(symbol, maturity, quantity)
@@ -79,11 +80,43 @@ class LambdaTrader(object):
         self.Logger.info('Confirmed orderId %s. Status: %s. Price: %s. Symbol: %s' % (orderId, status, price, symbol))
         self.UpdateStatus('Confirmed newOrderId: %s. ClientOrderId: %s. Status: %s. Side: %s. Qty: %s. Symbol: %s. '
                         'Maturity: %s. Price: %s'
-                        % (newOrderId, orderId, status, side, quantity, symbol, maturity, price))
+                        % (newOrderId, orderId, status, side, quantity, symbol, maturity, price),
+                          newOrderId, transactionTime, orderId, status)
 
-    def UpdateStatus(self, text):
+    def UpdateStatus(self, text, newOrderId, transactionTime, clientOrderId, status):
+        try:
+            response = self.__Orders.update_item(
+                Key={
+                    'NewOrderId': newOrderId['S'],
+                    'TransactionTime': transactionTime['S'],
+                },
+                UpdateExpression="set #s = :s, ClientOrderId = :c",
+                ConditionExpression="#s = :p and NewOrderId = :n",
+                ExpressionAttributeNames={
+                    '#s': 'Status'
+                },
+                ExpressionAttributeValues={
+                    ':s': status,
+                    ':c': clientOrderId,
+                    ':n': newOrderId['S'],
+                    ':p': 'PENDING'
+                },
+                ReturnValues="UPDATED_NEW")
+            text += '. %s' % response['Attributes']
+
+        except ClientError as e:
+            self.Logger.error(e.response['Error']['Message'])
+            text += '%s. %s' % ('', e.response['Error']['Message'])
+        except Exception as e:
+            self.Logger.error(e)
+            text += '%s. %s' % ('', e)
+        else:
+            text += ". UpdateItem succeeded."
+            self.Logger.info(json.dumps(response, indent=4, cls=DecimalEncoder))
+
         self.Logger.info('To Send Email: %s', text)
         self.Messages.append(text)
+
 
     def SendReport(self, text):
         try:
@@ -149,20 +182,23 @@ class LambdaTrader(object):
                                 % (security['Symbol'], balance, riskFactor, margin))
         except Exception as e:
             self.Logger.error(e)
-            self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], e),
+                              order['NewOrderId'], order['TransactionTime'], 0, 'INVALID')
             raise Return(False, None)
         else:
             if ordType.upper() != gain.OrderType.Market.upper():
                 supported = 'Only MARKET Orders are supported'
                 self.Logger.error(supported)
-                self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], supported))
+                self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], supported),
+                                  order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
                 raise Return(False, None)
             if side.upper() == gain.OrderSide.Buy.upper() or side.upper() == gain.OrderSide.Sell.upper():
                 raise Return(True, side)
             else:
                 error = 'Unknown side received. Side: %s' % side
                 self.Logger.error(error)
-                self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], error))
+                self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], error),
+                                  order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
                 raise Return(False, None)
 
     @asyncio.coroutine
@@ -186,11 +222,13 @@ class LambdaTrader(object):
         except Empty:
             error = 'No reply to requestForPositions'
             self.Logger.error(error)
-            self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], error))
+            self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], error),
+                              order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
             raise Return(0)
         except Exception as e:
             self.Logger.error(e)
-            self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], e),
+                              order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
             raise Return(0)
         else:
             raise Return(quantity)
@@ -208,7 +246,8 @@ class LambdaTrader(object):
 
         except Exception as e:
             self.Logger.error(e)
-            self.UpdateStatus('Error validate_maturity NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('Error validate_maturity NewOrderId: %s. %s' % (order['NewOrderId'], e),
+                              order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
             raise Return(None)
         else:
             raise Return(maturity)
@@ -225,17 +264,20 @@ class LambdaTrader(object):
             )
         except ClientError as e:
             self.Logger.error(e.response['Error']['Message'])
-            self.UpdateStatus('ClientError validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('ClientError validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e),
+                              order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
             raise Return(False, None)
         except Exception as e:
             self.Logger.error(e)
-            self.UpdateStatus('Error validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e))
+            self.UpdateStatus('Error validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e),
+                              order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
             raise Return(False, None)
         else:
             # self.Logger.info(json.dumps(security, indent=4, cls=DecimalEncoder))
             if response.has_key('Item') and response['Item']['Symbol'] == symbol and response['Item']['TradingEnabled']:
                 raise Return(True, response['Item'])
-            self.UpdateStatus('Symbol is unknown or not enabled for trading %s' % symbol)
+            self.UpdateStatus('Symbol is unknown or not enabled for trading %s' % symbol,
+                              order['NewOrderId'], order['TransactionTime'], 0, 'INVALID')
             raise Return(False, None)
 
     @asyncio.coroutine
@@ -256,7 +298,8 @@ class LambdaTrader(object):
             good, side = yield From(self.validate_order(order, security))
             if not good: continue
 
-            future.set_result((str(side), int(quantity), str(security['Symbol']), str(maturity), order['NewOrderId']))
+            future.set_result((str(side), int(quantity), str(security['Symbol']), str(maturity),
+                               order['NewOrderId'], order['TransactionTime']))
 
 
     # lifted from https://github.com/conor10/examples/blob/master/python/expiries/vix.py
