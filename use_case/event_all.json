@@ -1,0 +1,248 @@
+{
+	"Records": [
+		{
+			"eventID": "7f8c4d2486c5a98e1fc8a872c5dbc836",
+			"eventVersion": "1.1",
+			"dynamodb": {
+				"SequenceNumber": "31200000000011351682875",
+				"Keys": {
+					"NewOrderId": {
+						"S": "c1c94c4fbf254142a7e01ecd0b8ebb84"
+					},
+					"TransactionTime": {
+						"S": "1499970241.49"
+					}
+				},
+				"SizeBytes": 259,
+				"NewImage": {
+					"Status": {
+						"S": "PENDING"
+					},
+					"ClientOrderId": {
+						"N": "0"
+					},
+					"NewOrderId": {
+						"S": "011400d3583f4bd8ad3daf7153f34707"
+					},
+					"TransactionTime": {
+						"S": "1501177539.2"
+					},
+					"Details": {
+						"M": {
+							"OrdType": {
+								"S": "MARKET"
+							},
+							"Price": {
+								"N": "0"
+							},
+							"Side": {
+								"S": "SELL"
+							},
+							"Maturity": {
+								"S": "201708"
+							},
+							"ProductType": {
+								"S": "FUTURE"
+							},
+							"Symbol": {
+								"S": "6E"
+							},
+							"Quantity": {
+								"N": "1"
+							}
+						}
+					}
+				},
+				"ApproximateCreationDateTime": 1499970240,
+				"StreamViewType": "NEW_AND_OLD_IMAGES"
+			},
+			"awsRegion": "us-east-1",
+			"eventName": "INSERT",
+			"eventSourceARN": "arn",
+			"eventSource": "aws:dynamodb"
+		},
+		{
+			"eventID": "7f8c4d2486c5a98e1fc8a872c5dbc837",
+			"eventVersion": "1.1",
+			"dynamodb": {
+				"SequenceNumber": "31200000000011351682876",
+				"Keys": {
+					"NewOrderId": {
+						"S": "c1c94c4fbf254142a7e01ecd0b8ebb23"
+					},
+					"TransactionTime": {
+						"S": "1499970241.49"
+					}
+				},
+				"SizeBytes": 259,
+				"NewImage": {
+					"Status": {
+						"S": "PENDING"
+					},
+					"ClientOrderId": {
+						"N": "0"
+					},
+					"NewOrderId": {
+						"S": "7f3a4753f9b9499ba9e849f82da0f624"
+					},
+					"TransactionTime": {
+						"S": "1501177539.06"
+					},
+					"Details": {
+						"M": {
+							"OrdType": {
+								"S": "MARKET"
+							},
+							"Price": {
+								"N": "0"
+							},
+							"Side": {
+								"S": "BUY"
+							},
+							"Maturity": {
+								"S": "201708"
+							},
+							"ProductType": {
+								"S": "FUTURE"
+							},
+							"Symbol": {
+								"S": "6E"
+							},
+							"Quantity": {
+								"N": "3"
+							}
+						}
+					}
+				},
+				"ApproximateCreationDateTime": 1499970240,
+				"StreamViewType": "NEW_AND_OLD_IMAGES"
+			},
+			"awsRegion": "us-east-1",
+			"eventName": "INSERT",
+			"eventSourceARN": "arn",
+			"eventSource": "aws:dynamodb"
+		},
+		{
+			"eventID": "7f8c4d2486c5a98e1fc8a872c5dbc835",
+			"eventVersion": "1.1",
+			"dynamodb": {
+				"SequenceNumber": "31200000000011351682874",
+				"Keys": {
+					"NewOrderId": {
+						"S": "c1c94c4fbf254142a7e01ecd0b8ebb83"
+					},
+					"TransactionTime": {
+						"S": "1499970241.49"
+					}
+				},
+				"SizeBytes": 259,
+				"NewImage": {
+					"Status": {
+						"S": "PENDING"
+					},
+					"ClientOrderId": {
+						"N": "0"
+					},
+					"NewOrderId": {
+						"S": "7f3a4753f9b9499ba9e849f82da0f617"
+					},
+					"TransactionTime": {
+						"S": "1501177539.06"
+					},
+					"Details": {
+						"M": {
+							"OrdType": {
+								"S": "MARKET"
+							},
+							"Price": {
+								"N": "0"
+							},
+							"Side": {
+								"S": "SELL"
+							},
+							"Maturity": {
+								"S": "201708"
+							},
+							"ProductType": {
+								"S": "FUTURE"
+							},
+							"Symbol": {
+								"S": "SP"
+							},
+							"Quantity": {
+								"N": "1"
+							}
+						}
+					}
+				},
+				"ApproximateCreationDateTime": 1499970240,
+				"StreamViewType": "NEW_AND_OLD_IMAGES"
+			},
+			"awsRegion": "us-east-1",
+			"eventName": "INSERT",
+			"eventSourceARN": "arn",
+			"eventSource": "aws:dynamodb"
+		},
+		{
+			"eventID": "8ea6ca938adeb582e10ab608601df5e4",
+			"eventVersion": "1.1",
+			"dynamodb": {
+				"SequenceNumber": "31300000000011351682903",
+				"Keys": {
+					"NewOrderId": {
+						"S": "1828996a4d444c9e9e4054a9416e2121"
+					},
+					"TransactionTime": {
+						"S": "1499970242.07"
+					}
+				},
+				"SizeBytes": 259,
+				"NewImage": {
+					"Status": {
+						"S": "PENDING"
+					},
+					"ClientOrderId": {
+						"N": "0"
+					},
+					"NewOrderId": {
+						"S": "011400d3583f4bd8ad3daf7153f64707"
+					},
+					"TransactionTime": {
+						"S": "1501177539.2"
+					},
+					"Details": {
+						"M": {
+							"OrdType": {
+								"S": "MARKET"
+							},
+							"Price": {
+								"N": "0"
+							},
+							"Side": {
+								"S": "BUY"
+							},
+							"Maturity": {
+								"S": "201707"
+							},
+							"ProductType": {
+								"S": "FUTURE"
+							},
+							"Symbol": {
+								"S": "6E"
+							},
+							"Quantity": {
+								"N": "1"
+							}
+						}
+					}
+				},
+				"ApproximateCreationDateTime": 1499970240,
+				"StreamViewType": "NEW_AND_OLD_IMAGES"
+			},
+			"awsRegion": "us-east-1",
+			"eventName": "INSERT",
+			"eventSourceARN": "arn",
+			"eventSource": "aws:dynamodb"
+		}
+	]
+}

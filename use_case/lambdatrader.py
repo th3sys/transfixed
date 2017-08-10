@@ -5,7 +5,6 @@ import decimal
 import boto3
 from queue import Queue
 from queue import Empty
-import trollius as asyncio
 from transfixed import gainfixtrader as gain
 import base64
 import hmac
@@ -15,7 +14,6 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from botocore.exceptions import ClientError
-from trollius import Return, From
 
 # Helper class to convert a DynamoDB item to JSON.
 class DecimalEncoder(json.JSONEncoder):
@@ -34,8 +32,7 @@ class LambdaTrader(object):
         self.CurrentBalance = Queue()
         self.SubmittedOrders = Queue()
         self.Messages = []
-        self.Loop = asyncio.new_event_loop()
-        self.PendingOrders = asyncio.Queue(loop=self.Loop)
+        self.PendingOrders = Queue()
         db = boto3.resource('dynamodb', region_name='us-east-1')
         self.__Securities = db.Table('Securities')
         self.__Orders = db.Table('Orders')
@@ -63,8 +60,8 @@ class LambdaTrader(object):
             self.SubmittedOrders.put((event.ClientOrderId, event.Status, event.AvgPx))
             self.SubmittedOrders.task_done()
 
-    def SendOrder(self, future):
-        side, quantity, symbol, maturity, newOrderId, transactionTime = future.result()
+    def SendOrder(self, side, quantity, symbol, maturity, newOrderId, transactionTime):
+
         self.Logger.info('Submitting Validated order %s %s %s %s' % (side, quantity, symbol, maturity))
         if side.upper() == gain.OrderSide.Buy.upper():
             order = gain.BuyFutureMarketOrder(symbol, maturity, quantity)
@@ -150,17 +147,13 @@ class LambdaTrader(object):
     def Run(self):
         self.FixClient.start()
         if not self.PendingOrders.empty():
-            validate = asyncio.ensure_future(self.validate(), loop=self.Loop)
-            tasks = asyncio.gather(*[validate])
-            self.Loop.run_until_complete(tasks)
+            self.validate()
 
             report = reduce(lambda x, y: x + y, map(lambda x, y: '<br><b>%s</b>. %s\n' % (x + 1, y),
                                                     range(len(self.Messages)), self.Messages))
             self.SendReport(report)
-        self.Loop.close()
         self.FixClient.stop()
 
-    @asyncio.coroutine
     def validate_order(self, order, security):
         try:
             side = str(order['Details']['M']['Side']['S'])
@@ -184,24 +177,23 @@ class LambdaTrader(object):
             self.Logger.error(e)
             self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], e),
                               order['NewOrderId'], order['TransactionTime'], 0, 'INVALID')
-            raise Return(False, None)
+            return False, None
         else:
             if ordType.upper() != gain.OrderType.Market.upper():
                 supported = 'Only MARKET Orders are supported'
                 self.Logger.error(supported)
                 self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], supported),
                                   order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
-                raise Return(False, None)
+                return False, None
             if side.upper() == gain.OrderSide.Buy.upper() or side.upper() == gain.OrderSide.Sell.upper():
-                raise Return(True, side)
+                return True, side
             else:
                 error = 'Unknown side received. Side: %s' % side
                 self.Logger.error(error)
                 self.UpdateStatus('Error validate_order NewOrderId: %s. %s' % (order['NewOrderId'], error),
                                   order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
-                raise Return(False, None)
+                return False, None
 
-    @asyncio.coroutine
     def validate_quantity(self, order, security):
         try:
             quantity = int(order['Details']['M']['Quantity']['N'])
@@ -224,16 +216,15 @@ class LambdaTrader(object):
             self.Logger.error(error)
             self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], error),
                               order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
-            raise Return(0)
+            return 0
         except Exception as e:
             self.Logger.error(e)
             self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], e),
                               order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
-            raise Return(0)
+            return 0
         else:
-            raise Return(quantity)
+            return quantity
 
-    @asyncio.coroutine
     def validate_maturity(self, order):
         try:
             maturity = order['Details']['M']['Maturity']['S']
@@ -248,11 +239,10 @@ class LambdaTrader(object):
             self.Logger.error(e)
             self.UpdateStatus('Error validate_maturity NewOrderId: %s. %s' % (order['NewOrderId'], e),
                               order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
-            raise Return(None)
+            return None
         else:
-            raise Return(maturity)
+            return maturity
 
-    @asyncio.coroutine
     def validate_symbol(self, order):
         try:
             symbol = order['Details']['M']['Symbol']['S']
@@ -266,40 +256,38 @@ class LambdaTrader(object):
             self.Logger.error(e.response['Error']['Message'])
             self.UpdateStatus('ClientError validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e),
                               order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
-            raise Return(False, None)
+            return False, None
         except Exception as e:
             self.Logger.error(e)
             self.UpdateStatus('Error validate_symbol NewOrderId: %s. %s' % (order['NewOrderId'], e),
                               order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
-            raise Return(False, None)
+            return False, None
         else:
             # self.Logger.info(json.dumps(security, indent=4, cls=DecimalEncoder))
             if response.has_key('Item') and response['Item']['Symbol'] == symbol and response['Item']['TradingEnabled']:
-                raise Return(True, response['Item'])
+                return True, response['Item']
             self.UpdateStatus('Symbol is unknown or not enabled for trading %s' % symbol,
                               order['NewOrderId'], order['TransactionTime'], 0, 'INVALID')
-            raise Return(False, None)
+            return False, None
 
-    @asyncio.coroutine
     def validate(self):
         while not self.PendingOrders.empty():
-            future = asyncio.Future()
-            future.add_done_callback(self.SendOrder)
-            order = yield From(self.PendingOrders.get())
-            found, security = yield From(self.validate_symbol(order))
+
+            order = self.PendingOrders.get()
+            found, security = self.validate_symbol(order)
             if not found: continue
 
-            maturity = yield From(self.validate_maturity(order))
+            maturity = self.validate_maturity(order)
             if not maturity: continue
 
-            quantity = yield From(self.validate_quantity(order, security))
+            quantity = self.validate_quantity(order, security)
             if quantity < 1: continue
 
-            good, side = yield From(self.validate_order(order, security))
+            good, side = self.validate_order(order, security)
             if not good: continue
 
-            future.set_result((str(side), int(quantity), str(security['Symbol']), str(maturity),
-                               order['NewOrderId'], order['TransactionTime']))
+            self.SendOrder(str(side), int(quantity), str(security['Symbol']), str(maturity),
+                               order['NewOrderId'], order['TransactionTime'])
 
 
     # lifted from https://github.com/conor10/examples/blob/master/python/expiries/vix.py
