@@ -34,7 +34,7 @@ class LambdaTrader(object):
         self.CurrentBalance = Queue()
         self.SubmittedOrders = Queue()
         self.Messages = []
-        self.Loop = asyncio.get_event_loop()
+        self.Loop = asyncio.new_event_loop()
         self.PendingOrders = asyncio.Queue(loop=self.Loop)
         db = boto3.resource('dynamodb', region_name='us-east-1')
         self.__Securities = db.Table('Securities')
