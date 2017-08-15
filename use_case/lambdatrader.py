@@ -1,6 +1,7 @@
 import logging
 import json
 import datetime
+from datetime import timedelta
 import decimal
 import boto3
 from queue import Queue
@@ -49,7 +50,7 @@ class LambdaTrader(object):
         if event.AccountInquiry == gain.AccountInquiry.RequestForPositions:
             self.Logger.info('PosReqID: %s Account: %s' % (event.PosReqID, event.Account))
             self.Logger.info('Quantity: %s Amount: %s' % (event.LongQty - event.ShortQty, event.PosAmt))
-            self.CurrentPositions.put((event.PosReqID, event.LongQty - event.ShortQty))
+            self.CurrentPositions.put((event.PosReqID, event.Symbol, event.Maturity, event.LongQty - event.ShortQty))
             self.CurrentPositions.task_done()
 
     def OrderNotificationReceived(self, event):
@@ -71,8 +72,6 @@ class LambdaTrader(object):
         orderId, status, price = self.SubmittedOrders.get(True, 5)
         while trade.OrderId != orderId:
             self.Logger.error('requests do not match orderId: %s, trade.OrderId: %s' % (orderId, trade.OrderId))
-            self.SubmittedOrders.put((orderId, status, price))
-            self.SubmittedOrders.task_done()
             orderId, status, price = self.SubmittedOrders.get(True, 5)
         self.Logger.info('Confirmed orderId %s. Status: %s. Price: %s. Symbol: %s' % (orderId, status, price, symbol))
         self.UpdateStatus('Confirmed newOrderId: %s. ClientOrderId: %s. Status: %s. Side: %s. Qty: %s. Symbol: %s. '
@@ -165,8 +164,6 @@ class LambdaTrader(object):
             receiveColReqId, balance, ccy = self.CurrentBalance.get(True, 5)
             while colReqId != receiveColReqId:
                 self.Logger.error('requests do not match colReqId: %s, receiveColReqId: %s' % (colReqId, receiveColReqId))
-                self.CurrentBalance.put((receiveColReqId, balance, ccy))
-                self.CurrentBalance.task_done()
                 receiveColReqId, balance, ccy = self.CurrentBalance.get(True, 5)
             if marginCcy != ccy:
                 raise Exception('Margin Currency does not match Balance Currency for %s' % security['Symbol'])
@@ -195,17 +192,20 @@ class LambdaTrader(object):
                 return False, None
 
     def validate_quantity(self, order, security):
+        otherPositionsInSecurity = False
         try:
             quantity = int(order['Details']['M']['Quantity']['N'])
             side = order['Details']['M']['Side']['S']
+            symbol = order['Details']['M']['Symbol']['S']
+            maturity = order['Details']['M']['Maturity']['S']
             maxPosition = security['Risk']['MaxPosition']
             reqId = self.FixClient.requestForPositions()
-            receiveReqId, position = self.CurrentPositions.get(True, 5)
-            while reqId != receiveReqId:
-                self.Logger.error('requests do not match reqId: %s, receivedId: %s' % (reqId, receiveReqId))
-                self.CurrentPositions.put((receiveReqId, position))
-                self.CurrentPositions.task_done()
-                receiveReqId, position = self.CurrentPositions.get(True, 5)
+            receiveReqId, receivedSymbol, receivedMaturity, position = self.CurrentPositions.get(True, 5)
+            while reqId != receiveReqId or symbol != receivedSymbol or maturity != receivedMaturity:
+                otherPositionsInSecurity = True
+                self.Logger.error('requests do not match reqId: %s, receivedId: %s, maturity: %s, receivedMaturity: %s'
+                                  % (reqId, receiveReqId, maturity, receivedMaturity))
+                receiveReqId, receivedSymbol, receivedMaturity, position = self.CurrentPositions.get(True, 5)
 
             if side.upper() == gain.OrderSide.Buy.upper() and  maxPosition < position + quantity:
                 raise Exception('MaxPosition exceeded for %s' % security['Symbol'])
@@ -214,9 +214,22 @@ class LambdaTrader(object):
         except Empty:
             error = 'No reply to requestForPositions'
             self.Logger.error(error)
-            self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], error),
+            if otherPositionsInSecurity:
+                self.Logger.error('Gain Futures does not send a reply to requestForPositions if position is 0 and there is'
+                                  'a position in other maturity in this contract')
+                if maxPosition < quantity:
+                    self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], error+
+                                                                                      '. MaxPosition exceeded for %s' %
+                                                                                      security['Symbol']),
+                                      order['NewOrderId'], order['TransactionTime'], 0, 'INVALID')
+                    return 0
+                else:
+                    return quantity
+
+            else:
+                self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], error),
                               order['NewOrderId'],order['TransactionTime'], 0, 'INVALID')
-            return 0
+                return 0
         except Exception as e:
             self.Logger.error(e)
             self.UpdateStatus('Error validate_quantity NewOrderId: %s. %s' % (order['NewOrderId'], e),
@@ -232,7 +245,7 @@ class LambdaTrader(object):
             month = int(maturity[-2:])
             date = datetime.date(year, month, 1)
             expiry = self.get_expiry_date(date)
-            if expiry < datetime.date.today():
+            if expiry <= datetime.date.today() + timedelta(days=1):
                 raise Exception('%s maturity date has expired' % expiry)
 
         except Exception as e:
@@ -354,6 +367,7 @@ def main(event, context):
         logger.error(e)
         response['State']='ERROR'
 
+    raise Exception('Done')
     return response
 
 def lambda_handler(event, context):
@@ -364,4 +378,5 @@ if __name__ == '__main__':
     with open("event.json") as json_file:
         test_event = json.load(json_file, parse_float=decimal.Decimal)
     re = main(test_event, None)
+    #re = main(test_event, None)
     print(json.dumps(re))
