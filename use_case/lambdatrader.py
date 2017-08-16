@@ -12,6 +12,7 @@ import hmac
 import hashlib
 import os
 import smtplib
+import atexit
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from botocore.exceptions import ClientError
@@ -26,7 +27,16 @@ class DecimalEncoder(json.JSONEncoder):
                 return int(o)
         return super(DecimalEncoder, self).default(o)
 
+class Singleton(type):
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
 class LambdaTrader(object):
+    __metaclass__ = Singleton
     def __init__(self, logger):
         self.Logger = logger
         self.CurrentPositions = Queue()
@@ -144,14 +154,16 @@ class LambdaTrader(object):
             self.Logger.error(e)
 
     def Run(self):
-        self.FixClient.start()
+        if not self.FixClient.SocketInitiator.application.connected:
+            self.FixClient.start()
+
         if not self.PendingOrders.empty():
             self.validate()
 
             report = reduce(lambda x, y: x + y, map(lambda x, y: '<br><b>%s</b>. %s\n' % (x + 1, y),
                                                     range(len(self.Messages)), self.Messages))
             self.SendReport(report)
-        self.FixClient.stop()
+            self.Messages = []
 
     def validate_order(self, order, security):
         try:
@@ -340,6 +352,14 @@ class LambdaTrader(object):
         # Friday back by one day before subtracting
         return third_friday_next_month - thirty_days
 
+trader = None
+@atexit.register
+def lambda_exit():
+    if trader is not None:
+        trader.Logger.info('lambda_exit is called')
+        trader.FixClient.stop()
+
+
 def main(event, context):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
@@ -351,6 +371,7 @@ def main(event, context):
     response = {'State':'OK'}
     try:
         logger.info('Start fix trader')
+        global trader
         trader = LambdaTrader(logger)
         for record in event['Records']:
             if record['eventName'] == 'INSERT':
@@ -367,7 +388,6 @@ def main(event, context):
         logger.error(e)
         response['State']='ERROR'
 
-    raise Exception('Done')
     return response
 
 def lambda_handler(event, context):
@@ -378,5 +398,5 @@ if __name__ == '__main__':
     with open("event.json") as json_file:
         test_event = json.load(json_file, parse_float=decimal.Decimal)
     re = main(test_event, None)
-    #re = main(test_event, None)
+    re = main(test_event, None)
     print(json.dumps(re))

@@ -18,7 +18,7 @@ Details = {
         "Side" : "BUY",
         "ProductType" : "FUTURE",
         "Symbol" : "6E",
-        "Maturity" : "201708",
+        "Maturity" : "201709",
         "Quantity" : 1,
         "OrdType" : "MARKET",
         "Price" : 0
